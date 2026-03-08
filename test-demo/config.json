@@ -1,0 +1,35 @@
+{
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly"
+  },
+  "templates": {
+    "weekly": {
+      "enabled": true,
+      "template": {
+        "path": "../templates/weekly.hbs"
+      },
+      "sources": {
+        "articles": "./articles",
+        "tools": "./tools",
+        "notes": "./notes"
+      },
+      "output": {
+        "path": "./output",
+        "filename": "Weekly-{{issueNumber}}.md"
+      },
+      "content": {
+        "articles": {
+          "topN": 10,
+          "minRating": 0
+        },
+        "tools": {
+          "perCategory": 3
+        },
+        "notes": {
+          "groupBy": "none"
+        }
+      }
+    }
+  }
+}

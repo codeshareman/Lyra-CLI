@@ -1,0 +1,10 @@
+.wechat-theme-industrial {
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fafbfd 0%, #f3f6fb 100%);
+  border-color: #d5dcea;
+  box-shadow: 0 10px 24px rgba(21, 29, 43, 0.1);
+}
+
+.wechat-theme-industrial h2 {
+  letter-spacing: 0.18em;
+}

@@ -1,0 +1,25 @@
+{
+  "description": "Minimal configuration example - uses defaults for most settings",
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly"
+  },
+  "templates": {
+    "weekly": {
+      "enabled": true,
+      "template": {
+        "path": "./templates/weekly.hbs"
+      },
+      "sources": {
+        "articles": "./Clippings",
+        "tools": "./Tools",
+        "notes": "./Permanent Notes"
+      },
+      "output": {
+        "path": "./Weekly",
+        "filename": "Weekly-{{issueNumber}}.md"
+      },
+      "content": {}
+    }
+  }
+}

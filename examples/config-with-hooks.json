@@ -1,0 +1,41 @@
+{
+  "description": "Configuration example with custom hooks",
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly"
+  },
+  "templates": {
+    "weekly": {
+      "enabled": true,
+      "template": {
+        "path": "./templates/weekly.hbs"
+      },
+      "hooks": {
+        "customArticleScore": "./hooks/boost-recent-articles.js",
+        "customToolScore": "./hooks/prioritize-open-source.js",
+        "contentFilter": "./hooks/filter-by-tags.js"
+      },
+      "sources": {
+        "articles": "./Clippings",
+        "tools": "./Tools",
+        "notes": "./Permanent Notes"
+      },
+      "output": {
+        "path": "./Weekly",
+        "filename": "Weekly-{{issueNumber}}.md"
+      },
+      "content": {
+        "articles": {
+          "topN": 10,
+          "minRating": 3
+        },
+        "tools": {
+          "perCategory": 1
+        },
+        "notes": {
+          "groupBy": "tags"
+        }
+      }
+    }
+  }
+}

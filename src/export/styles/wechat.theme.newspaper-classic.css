@@ -1,0 +1,12 @@
+.wechat-theme-newspaper-classic {
+  border-radius: 6px;
+  background: #f6f2e9;
+  border-color: #d7ccb8;
+  box-shadow: none;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Times New Roman",
+    Georgia, "Songti SC", "STSong", serif;
+}
+
+.wechat-theme-newspaper-classic h2 {
+  color: #28221a;
+}

@@ -1,0 +1,10 @@
+.wechat-theme-modernist-print {
+  border-radius: 4px;
+  background: #f7f8fa;
+  border-color: #d0d5de;
+  box-shadow: 0 8px 18px rgba(20, 26, 36, 0.08);
+}
+
+.wechat-theme-modernist-print h2 {
+  letter-spacing: 0.18em;
+}

@@ -1,0 +1,43 @@
+{
+  "description": "Minimal enhanced weekly configuration example",
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly"
+  },
+  "templates": {
+    "weekly": {
+      "enabled": true,
+      "templateVersion": "enhanced",
+      "template": {
+        "path": "./templates/weekly.hbs"
+      },
+      "sources": {
+        "articles": "./Clippings",
+        "tools": "./Tools",
+        "notes": "./Permanent Notes"
+      },
+      "output": {
+        "path": "./Weekly",
+        "filename": "Enhanced-Weekly-{{issueNumber}}.md"
+      },
+      "content": {
+        "articles": {
+          "topN": 10,
+          "minRating": 0
+        },
+        "tools": {
+          "perCategory": 2
+        },
+        "notes": {
+          "groupBy": "none"
+        }
+      },
+      "export": {
+        "formats": ["markdown"],
+        "wechat": {
+          "validateImages": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+.wechat-theme-magazine-bold {
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fcfdff 0%, #f3f7ff 100%);
+  border-color: #d6def3;
+  box-shadow: 0 14px 34px rgba(37, 63, 146, 0.12);
+}
+
+.wechat-theme-magazine-bold h2 {
+  border-bottom-color: rgba(51, 88, 212, 0.36);
+}

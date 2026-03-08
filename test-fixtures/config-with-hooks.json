@@ -1,0 +1,38 @@
+{
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly"
+  },
+  "templates": {
+    "weekly": {
+      "enabled": true,
+      "template": {
+        "path": "./templates/weekly.hbs"
+      },
+      "hooks": {
+        "customArticleScore": "./test-fixtures/hooks/customScore.js"
+      },
+      "sources": {
+        "articles": "./test-fixtures/articles",
+        "tools": "./test-fixtures/tools",
+        "notes": "./test-fixtures/notes"
+      },
+      "output": {
+        "path": "./test-output",
+        "filename": "Weekly-{{issueNumber}}.md"
+      },
+      "content": {
+        "articles": {
+          "topN": 10,
+          "minRating": 0
+        },
+        "tools": {
+          "perCategory": 1
+        },
+        "notes": {
+          "groupBy": "none"
+        }
+      }
+    }
+  }
+}

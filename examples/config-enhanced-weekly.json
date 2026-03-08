@@ -1,0 +1,124 @@
+{
+  "description": "Enhanced weekly full configuration example",
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly"
+  },
+  "templates": {
+    "weekly": {
+      "enabled": true,
+      "templateVersion": "enhanced",
+      "template": {
+        "path": "./templates/weekly.hbs"
+      },
+      "sources": {
+        "articles": "./Clippings",
+        "tools": "./Tools",
+        "notes": "./Permanent Notes",
+        "life": "./Life",
+        "food": "./Food",
+        "exercise": "./Exercise",
+        "music": "./Music"
+      },
+      "output": {
+        "path": "./Weekly",
+        "filename": "Enhanced-Weekly-{{issueNumber}}.md"
+      },
+      "content": {
+        "articles": {
+          "topN": 20,
+          "minRating": 3
+        },
+        "tools": {
+          "perCategory": 3
+        },
+        "notes": {
+          "groupBy": "none"
+        }
+      },
+      "visual": {
+        "coverImage": "https://example.com/weekly/cover.jpg",
+        "backgroundImage": "https://example.com/weekly/background.jpg",
+        "goldenQuote": {
+          "content": "输出来自持续输入，成长来自持续迭代。",
+          "author": "ZNorth"
+        }
+      },
+      "modules": {
+        "weeklyUpdates": {
+          "enabled": true,
+          "icon": "📅"
+        },
+        "reading": {
+          "enabled": true,
+          "icon": "📚",
+          "filter": {
+            "categories": ["文章", "书籍"],
+            "minRating": 3,
+            "tags": ["reading", "longread"]
+          }
+        },
+        "tech": {
+          "enabled": true,
+          "icon": "🛠️",
+          "filter": {
+            "categories": ["工具", "代码", "技术"]
+          }
+        },
+        "life": {
+          "enabled": true,
+          "icon": "🖼️"
+        },
+        "products": {
+          "enabled": true,
+          "icon": "📦"
+        },
+        "food": {
+          "enabled": true,
+          "icon": "🍴"
+        },
+        "exercise": {
+          "enabled": true,
+          "icon": "🏸"
+        },
+        "music": {
+          "enabled": true,
+          "icon": "🎵"
+        },
+        "thoughts": {
+          "enabled": true,
+          "icon": "💬"
+        }
+      },
+      "export": {
+        "formats": ["markdown", "html", "wechat"],
+        "wechat": {
+          "validateImages": true,
+          "imageProxyUrl": "https://images.weserv.nl/?url={url}",
+          "inaccessibleImageDomains": [
+            "images.unsplash.com",
+            "raw.githubusercontent.com"
+          ],
+          "imageOptimization": {
+            "maxWidth": 1200,
+            "quality": 82,
+            "format": "webp"
+          }
+        }
+      },
+      "ai": {
+        "enabled": true,
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "apiKey": "${OPENAI_API_KEY}",
+        "summaries": {
+          "enabled": true,
+          "maxLength": 220,
+          "language": "zh-CN",
+          "strategy": "cache",
+          "cacheDir": "./.cache/summaries"
+        }
+      }
+    }
+  }
+}

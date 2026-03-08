@@ -1,0 +1,154 @@
+.wechat-article {
+  max-width: 760px;
+  margin: 22px auto 44px;
+  padding: 42px 36px;
+  font-size: 15px;
+  line-height: 1.82;
+  color: #2b3445;
+  background: linear-gradient(180deg, #fdfdfb 0%, #f7f9fd 100%);
+  border: 1px solid #e1e6ee;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(24, 36, 58, 0.07);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+.wechat-article h1 {
+  margin: 0 0 10px;
+  padding-bottom: 12px;
+  font-size: 42px;
+  line-height: 1.12;
+  text-align: left;
+  letter-spacing: 0.022em;
+  color: #1b2230;
+  border-bottom: 1px solid rgba(42, 58, 90, 0.22);
+  font-family: "Times New Roman", Georgia, "Songti SC", serif;
+  font-weight: 700;
+}
+
+.wechat-article h1 + h2 {
+  display: table;
+  margin: 2px 0 10px auto;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: #253a67;
+  color: #f4f7ff;
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.wechat-article h1 + h2 + h3 {
+  margin-top: 0;
+  margin-bottom: 6px;
+  color: #768198;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.wechat-article h1 + h2 + h3 + p {
+  margin: 0 0 18px;
+  color: #8d98ad;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.wechat-article h2 {
+  margin-top: 30px;
+  margin-bottom: 12px;
+  padding: 0 0 7px;
+  display: block;
+  font-size: 14px;
+  line-height: 1.36;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #3f5fa8;
+  border-top: 0;
+  border-bottom: 1px solid rgba(63, 95, 168, 0.24);
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.wechat-article h3 {
+  margin-top: 14px;
+  margin-bottom: 7px;
+  font-size: 18px;
+  line-height: 1.38;
+  color: #202a3b;
+  font-weight: 700;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+.wechat-article p {
+  margin: 0.64em 0;
+  text-align: justify;
+  letter-spacing: 0.003em;
+}
+
+.wechat-article hr {
+  border: 0;
+  border-top: 3px solid #2f446f;
+  margin: 0 0 24px;
+}
+
+.wechat-article ul {
+  margin: 0.72em 0;
+  padding-left: 1.22em;
+}
+
+.wechat-article li + li {
+  margin-top: 0.45em;
+}
+
+.wechat-article img {
+  width: 100%;
+  border-radius: 6px;
+  margin: 12px 0 16px;
+  border: 1px solid #d7deeb;
+  box-shadow: 0 2px 8px rgba(27, 39, 61, 0.06);
+}
+
+.wechat-article pre.code-block {
+  background: #1f2937;
+  color: #eef3ff;
+  border: 1px solid #161f2f;
+  border-radius: 5px;
+  padding: 11px 13px;
+}
+
+.wechat-article blockquote {
+  margin: 0.9em 0;
+  padding: 0.74em 0.94em;
+  border-left: 3px solid #6c84bf;
+  background: #f5f8ff;
+  color: #384d6f;
+  border-radius: 7px;
+}
+
+.wechat-article a {
+  color: #3f5fa8;
+  text-decoration: underline;
+  text-decoration-color: rgba(63, 95, 168, 0.44);
+  text-underline-offset: 2px;
+}
+
+.wechat-article strong {
+  color: #213b69;
+}
+
+.wechat-article code {
+  font-family: Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  color: #1f3b74;
+  background: #edf2ff;
+  padding: 0.12em 0.3em;
+  border-radius: 3px;
+}

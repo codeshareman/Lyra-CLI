@@ -1,0 +1,97 @@
+{
+  "description": "Enhanced weekly configuration with selective modules",
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly"
+  },
+  "templates": {
+    "weekly": {
+      "enabled": true,
+      "templateVersion": "enhanced",
+      "template": {
+        "path": "./templates/weekly.hbs"
+      },
+      "sources": {
+        "articles": "./Clippings",
+        "tools": "./Tools",
+        "notes": "./Permanent Notes",
+        "life": "./Life",
+        "exercise": "./Exercise"
+      },
+      "output": {
+        "path": "./Weekly",
+        "filename": "Enhanced-Selective-{{issueNumber}}.md"
+      },
+      "content": {
+        "articles": {
+          "topN": 15,
+          "minRating": 2
+        },
+        "tools": {
+          "perCategory": 3
+        },
+        "notes": {
+          "groupBy": "none"
+        }
+      },
+      "modules": {
+        "weeklyUpdates": {
+          "enabled": true,
+          "icon": "📅"
+        },
+        "reading": {
+          "enabled": true,
+          "icon": "📚",
+          "filter": {
+            "categories": ["文章", "书籍"],
+            "tags": ["deep-dive"],
+            "minRating": 4
+          }
+        },
+        "tech": {
+          "enabled": true,
+          "icon": "🛠️",
+          "filter": {
+            "categories": ["工具", "代码"]
+          }
+        },
+        "life": {
+          "enabled": false,
+          "icon": "🖼️"
+        },
+        "products": {
+          "enabled": false,
+          "icon": "📦"
+        },
+        "food": {
+          "enabled": false,
+          "icon": "🍴"
+        },
+        "exercise": {
+          "enabled": true,
+          "icon": "🏸"
+        },
+        "music": {
+          "enabled": false,
+          "icon": "🎵"
+        },
+        "thoughts": {
+          "enabled": true,
+          "icon": "💬"
+        }
+      },
+      "export": {
+        "formats": ["markdown", "wechat"],
+        "wechat": {
+          "validateImages": true
+        }
+      },
+      "ai": {
+        "enabled": false,
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "apiKey": "${OPENAI_API_KEY}"
+      }
+    }
+  }
+}

@@ -1,0 +1,333 @@
+---
+id: {{{yamlString metadata.id}}}
+title: {{{yamlString metadata.title}}}
+type: {{{yamlString metadata.type}}}
+issue_number: {{metadata.issueNumber}}
+date: {{{yamlString (formatDate metadata.date "yyyy-MM-dd")}}}
+week_start: {{{yamlString (formatDate metadata.weekStart "yyyy-MM-dd")}}}
+week_end: {{{yamlString (formatDate metadata.weekEnd "yyyy-MM-dd")}}}
+created: {{{yamlString (formatDate metadata.created "yyyy-MM-dd HH:mm:ss")}}}
+modified: {{{yamlString (formatDate metadata.modified "yyyy-MM-dd HH:mm:ss")}}}
+status: {{{yamlString metadata.status}}}
+tags: {{#if metadata.tags}}[{{#each metadata.tags}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]{{else}}[]{{/if}}
+published_platforms: {{#if metadata.publishedPlatforms}}[{{#each metadata.publishedPlatforms}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]{{else}}[]{{/if}}
+{{#if metadata.coverImage}}
+cover_image: {{{yamlString metadata.coverImage}}}
+{{/if}}
+{{#if metadata.backgroundImage}}
+background_image: {{{yamlString metadata.backgroundImage}}}
+{{/if}}
+{{#if metadata.goldenQuote}}
+golden_quote:
+  content: {{{yamlString metadata.goldenQuote.content}}}
+  author: {{{yamlString metadata.goldenQuote.author}}}
+{{/if}}
+---
+
+# {{#if metadata.brandTitle}}{{uppercase metadata.brandTitle}}{{else}}Z°N VOYAGE LOG{{/if}}
+
+## ISSUE #{{padStart metadata.issueNumber 3 "0"}}
+
+### SYSTEM VERSION · **v{{formatDate metadata.weekStart "yyyy"}}.{{metadata.issueNumber}}.0**
+
+RANGE: {{formatDate metadata.weekStart "MM.dd"}} — {{formatDate metadata.weekEnd "MM.dd"}} · STATUS: {{uppercase metadata.status}}
+
+---
+
+{{#if metadata.coverImage}}
+{{{renderImage metadata.coverImage "Weekly Cover"}}}
+{{/if}}
+
+{{#if metadata.goldenQuote}}
+> "{{metadata.goldenQuote.content}}"
+> —— {{metadata.goldenQuote.author}}
+{{/if}}
+
+{{#if (hasItems content.weeklyUpdates)}}
+## 本周动态
+
+{{#each content.weeklyUpdates}}
+### {{title}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{else if content}}
+{{content}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.readingArticles)}}
+## 精读文章
+
+{{#each content.readingArticles}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{#if personalReflection}}
+**个人回响**：{{personalReflection}}
+{{/if}}
+
+{{/each}}
+{{else if (hasItems content.reading)}}
+## 精读文章
+
+{{#each content.reading}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{#if personalReflection}}
+**个人回响**：{{personalReflection}}
+{{/if}}
+
+{{/each}}
+{{else if (hasItems content.articles)}}
+## 精读文章
+
+{{#each content.articles}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.readingBooks)}}
+## 书籍输入
+
+{{#each content.readingBooks}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{#if personalReflection}}
+**个人回响**：{{personalReflection}}
+{{/if}}
+
+{{/each}}
+
+### 书籍数据
+
+| 标题 | 评分 | 链接 |
+| --- | --- | --- |
+{{#each content.readingBooks}}
+| {{title}} | {{#if rating}}{{rating}}/5{{else}}-{{/if}} | {{#if url}}[链接]({{{url}}}){{else}}-{{/if}} |
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.tech)}}
+## 技术与生产力
+
+{{#each content.tech}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{#if codeSnippet}}
+{{{renderCode codeSnippet language}}}
+{{/if}}
+
+{{/each}}
+{{else if (hasItems content.tools)}}
+## 技术与生产力
+
+{{#each content.tools}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{#if codeSnippet}}
+{{{renderCode codeSnippet language}}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.products)}}
+## 购物与好物
+
+{{#each content.products}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}{{#if rating}} · {{rating}}/5{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{else if content}}
+{{content}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.life)}}
+## 生活瞬间
+
+{{#each content.life}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.food)}}
+## 饮食记录
+
+{{#each content.food}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}{{#if rating}} · {{rating}}/5{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{else if content}}
+{{content}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.exercise)}}
+## 运动记录
+
+{{#each content.exercise}}
+- **{{#if url}}[{{type}}]({{{url}}}){{else}}{{type}}{{/if}}**：{{formatDuration duration}}{{#if calories}}（消耗 {{calories}} 卡路里）{{/if}}{{#if notes}}，{{notes}}{{/if}}
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.music)}}
+## 本周旋律
+
+{{#each content.music}}
+- **{{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}** - {{artist}}{{#if album}}（{{album}}）{{/if}}{{#if feeling}}：{{feeling}}{{/if}}
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.thoughts)}}
+## 随感
+
+{{#each content.thoughts}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if aiSummary}}
+{{aiSummary}}
+{{else if description}}
+{{description}}
+{{else if content}}
+{{content}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{/each}}
+{{/if}}

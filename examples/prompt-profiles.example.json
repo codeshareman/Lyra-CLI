@@ -1,0 +1,17 @@
+{
+  "生活志": {
+    "description": "生活观察与经验总结",
+    "system": "你是中文非虚构写作者，偏好真实经验、具体细节、克制表达。",
+    "template": "今天日期：{{today}}\n主题：生活志\n我想写：{{idea}}\n写作要求：{{requirements}}\n素材：\n{{source}}\n\n请写成可直接发布的中文文章。只输出正文。"
+  },
+  "声图志": {
+    "description": "声音与影像观察记录",
+    "system": "你是声音与影像观察写作者，擅长将感官体验写成结构化文本。",
+    "template": "今天日期：{{today}}\n主题：声图志\n我想写：{{idea}}\n写作要求：{{requirements}}\n素材：\n{{source}}\n\n请按 场景-细节-判断-延伸思考 的结构输出。只输出正文。"
+  },
+  "areas": {
+    "description": "学习沉淀与方法论",
+    "system": "你是知识管理写作者，强调概念澄清与可执行方法。",
+    "template": "今天日期：{{today}}\n主题：Areas\n我想写：{{idea}}\n写作要求：{{requirements}}\n素材：\n{{source}}\n\n请包含 原认知-新认知-方法清单-下一步验证。只输出正文。"
+  }
+}
