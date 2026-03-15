@@ -42,6 +42,7 @@ lyra init
 | `lyra check-metadata` | `lyra check-meta` | 检查并整理元数据与 tags | `lyra check-metadata --path ../ZNorth --fix-tags` |
 | `lyra article` | `lyra a` | 生成文章 Prompt / 自动提议题 | `lyra article --module 生活志 --auto-idea --requirements "900字以内"` |
 | `lyra prompt` | `lyra p` | 兼容别名（等同 `lyra article`） | `lyra prompt --module 生活志 --auto-idea` |
+| `lyra publish` | - | 发布到平台草稿（WeChat API/Playwright） | `lyra publish --method api --config ./wechat_publish.json --content ./output/article.wechat.html` |
 
 ### 常用选项
 
@@ -106,7 +107,112 @@ lyra schedule --daemon
 lyra check-images --dir ./Weekly
 ```
 
-### 5. 元数据与标签整理（单文件/目录）
+### 5. 发布到微信公众号草稿
+```bash
+# API 发布（默认 dry-run）
+lyra publish --method api --config ./wechat_publish.json --content ./output/article.wechat.html
+
+# 或者使用 --file（--config 的别名）
+lyra publish --method api --file ./wechat_publish.json --content ./output/article.wechat.html
+
+# API 发布（执行）
+lyra publish --method api --config ./wechat_publish.json --execute
+
+# Playwright 发布（占位脚本，需自行实现）
+lyra publish --method playwright --config ./wechat_publish.json --content ./output/article.wechat.html
+```
+
+交互说明（发布命令）：
+- 未传 `--config` 或 `--content` 时，会进入交互输入路径。
+- `--execute` 时会提示确认（TTY 环境）。
+
+发布模式与定时发布（配置）：
+```json
+{
+  "publish": {
+    "outputDir": "./Output/Z° North/Publish",
+    "wechat": {
+      "mode": "publish",
+      "publishAt": "2026-03-20 09:00",
+      "contentFile": "./Output/Z° North/Z°N 生活志/drafts/示例文章.wechat.html",
+      "configFile": "./wechat_publish.json"
+    }
+  }
+}
+```
+
+说明：
+- `apiScript` 可选；不提供时，CLI 内置 WeChat API 调用逻辑。
+- `configFile` 建议指向独立的 `wechat_publish.json`，包含 `title/author/digest/thumb_media_id` 等字段。
+
+封面图自动生成（wechat_publish.json 可选配置）：
+```json
+{
+  "cover_source_order": ["ai", "unsplash", "placeholder"],
+  "cover_ratio": "16:9",
+  "cover_prompt": "生活志封面，电影感，温暖自然光",
+  "cover_ai_endpoint": "https://your-ai-service/generate-cover",
+  "cover_ai_response_url": "imageUrl",
+  "cover_ai_response_base64": "imageBase64",
+  "cover_ai_response_mime": "mime",
+  "unsplash_access_key": "${UNSPLASH_ACCESS_KEY}",
+  "unsplash_query": "city life, warm light",
+  "unsplash_image_field": "results.0.urls.regular",
+  "placeholder_cover": true
+}
+```
+
+### 6. 自动生成文章头图（4:3 / 16:9）
+```bash
+# 生成文章时，按配置自动生成头图
+lyra article --module 生活志 --auto-idea
+```
+
+配置示例（放在 ai.prompting.articleImage）：
+```json
+{
+  "ai": {
+    "prompting": {
+      "articleImage": {
+        "enabled": true,
+        "script": "./scripts/generate-cover-image.js",
+        "ratio": "16:9",
+        "outputDir": "./Output/Z°N 生活志/images",
+        "insertCoverImage": true
+      }
+    }
+  }
+}
+```
+
+模块级配置示例（放在 ai.prompting.modules）：
+```json
+{
+  "ai": {
+    "prompting": {
+      "modules": {
+        "audiovisual": {
+          "label": "声图志",
+          "publishDir": "Z°N 声图志",
+          "promptFile": "prompt.md",
+          "coverPrompt": "偏电影感的声图志头图提示词，强调氛围与情绪",
+          "platforms": {
+            "wechat": { "promptFile": "prompt.wechat.md" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+头图提示词来源优先级：
+1. `templates.article.ai.prompting.modules.<key>.coverPrompt`
+2. `cover.prompt.<platform>.md` / `cover.prompt.md`（模块发布目录内）
+3. `prompt.<platform>.md` / `prompt.md`
+4. 回退到 `imagePromptNanobanaPro`
+
+### 7. 元数据与标签整理（单文件/目录）
 ```bash
 # 目录检查
 lyra check-metadata --path ../ZNorth
@@ -121,7 +227,7 @@ lyra check-metadata --path ./Input/Notes/today.md --fix-tags
 lyra check-metadata --path ../ZNorth --fix-tags --ai-tags --provider openai
 ```
 
-### 5. 低负担写作场景（议题 -> Prompt）
+### 8. 低负担写作场景（议题 -> Prompt）
 ```bash
 # 查看主题模板
 lyra article --list

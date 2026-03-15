@@ -70,6 +70,7 @@ lyra weekly
 | `lyra check-metadata` | `lyra check-meta` | 元数据与 tags 整理 |
 | `lyra article` | `lyra a` | 文章 Prompt 组装 |
 | `lyra prompt` | `lyra p` | `article` 的兼容别名 |
+| `lyra publish` | - | 发布到平台草稿（WeChat API/Playwright） |
 
 ## 元数据与标签治理
 

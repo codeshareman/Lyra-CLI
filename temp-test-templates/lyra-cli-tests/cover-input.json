@@ -1,0 +1,9 @@
+{
+  "title": "Lyra 头图测试",
+  "content": "示例正文：用于测试头图生成脚本。",
+  "prompt": "偏电影感的声图志头图提示词，强调氛围与情绪",
+  "ratio": "16:9",
+  "module": "声图志",
+  "platform": "wechat",
+  "outputPath": "/Users/codeshareman/Documents/ME/GitHub/Lyra/temp-test-templates/lyra-cli-tests/cover/lyra-cover-16x9.svg"
+}

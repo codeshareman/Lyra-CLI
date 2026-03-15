@@ -446,6 +446,7 @@ title: 刻意练习复盘
       },
       {
         moduleName: '生活志',
+        insertCoverImage: true,
       }
     );
 
@@ -455,5 +456,73 @@ title: 刻意练习复盘
     expect(markdown).toContain('✨ 温馨提示：本文约');
     expect(markdown).toContain('正文第一段。');
     expect(markdown).not.toContain('## Nanobana Pro 生图提示词');
+  });
+
+  it('应优先使用模块 coverPrompt 作为头图提示词', async () => {
+    const moduleDir = path.join(tempDir, 'Z°N 声图志');
+    await fs.mkdir(moduleDir, { recursive: true });
+
+    const runtimeConfig = {
+      configDir: tempDir,
+      articleImage: {
+        enabled: true,
+        ratio: '16:9',
+        insertCoverImage: true,
+      },
+    } as any;
+
+    const moduleConfig = {
+      key: 'audiovisual',
+      label: '声图志',
+      publishDir: moduleDir,
+      promptFile: 'prompt.md',
+      platformPromptFiles: {},
+      sources: [],
+      coverPrompt: '声图志头图提示词（配置内）',
+    } as any;
+
+    const prompt = await (cli as any).resolveCoverPrompt({
+      runtimeConfig,
+      moduleConfig,
+      moduleName: '声图志',
+      platform: 'wechat',
+      fallbackPrompt: 'fallback',
+    });
+
+    expect(prompt).toContain('声图志头图提示词');
+  });
+
+  it('应从模块目录读取 cover.prompt.wechat.md', async () => {
+    const moduleDir = path.join(tempDir, 'Z°N 生活志');
+    await fs.mkdir(moduleDir, { recursive: true });
+    await fs.writeFile(path.join(moduleDir, 'cover.prompt.wechat.md'), '生活志头图提示词', 'utf-8');
+
+    const runtimeConfig = {
+      configDir: tempDir,
+      articleImage: {
+        enabled: true,
+        ratio: '16:9',
+        insertCoverImage: true,
+      },
+    } as any;
+
+    const moduleConfig = {
+      key: 'life',
+      label: '生活志',
+      publishDir: moduleDir,
+      promptFile: 'prompt.md',
+      platformPromptFiles: {},
+      sources: [],
+    } as any;
+
+    const prompt = await (cli as any).resolveCoverPrompt({
+      runtimeConfig,
+      moduleConfig,
+      moduleName: '生活志',
+      platform: 'wechat',
+      fallbackPrompt: 'fallback',
+    });
+
+    expect(prompt).toContain('生活志头图提示词');
   });
 });

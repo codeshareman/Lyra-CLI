@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1f2937" />
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#g)" />
+  <g font-family="Arial, sans-serif">
+    <text x="80" y="160" fill="#e2e8f0" font-size="54" font-weight="700">Lyra 头图测试</text>
+    <text x="80" y="230" fill="#94a3b8" font-size="26">Ratio: 16:9</text>
+    <text x="80" y="300" fill="#94a3b8" font-size="22">偏电影感的声图志头图提示词，强调氛围与情绪</text>
+  </g>
+</svg>

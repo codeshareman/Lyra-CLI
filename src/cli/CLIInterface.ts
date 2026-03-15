@@ -1,6 +1,8 @@
 import { Command } from 'commander';
+import { spawn } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import matter from 'gray-matter';
 import { IContentGenerator, ITemplateRegistry } from '../types/interfaces';
 import { Scheduler } from '../core/Scheduler';
@@ -65,6 +67,7 @@ interface ResolvedPromptRuntimeConfig {
   modules: Record<string, PromptModuleConfig>;
   platformSystemPromptFiles: Record<string, string>;
   articleAI: ArticleAIConfig;
+  articleImage: ArticleImageConfig;
   outputDraftsDirName: string;
 }
 
@@ -85,6 +88,7 @@ interface PromptModuleConfig {
   promptFile?: string;
   platformPromptFiles: Record<string, string>;
   sources: string[];
+  coverPrompt?: string;
 }
 
 interface ArticleAIConfig {
@@ -99,10 +103,23 @@ interface ArticleAIConfig {
   maxTokens?: number;
 }
 
+interface ArticleImageConfig {
+  enabled: boolean;
+  provider?: 'script';
+  script?: string;
+  ratio?: '4:3' | '16:9';
+  outputDir?: string;
+  insertCoverImage?: boolean;
+  promptDir?: string;
+  promptMap?: Record<string, string>;
+}
+
 interface GeneratedArticlePayload {
   title: string;
   content: string;
   imagePromptNanobanaPro: string;
+  coverImage?: string;
+  coverImageRatio?: string;
 }
 
 interface LengthConstraint {
@@ -200,6 +217,29 @@ export class CLIInterface {
 `)
       .action(async (template, options) => {
         await this.handleCreate(template, options);
+      });
+
+    // publish 命令 - 发布到平台草稿（如微信公众号）
+    this.program
+      .command('publish')
+      .description('🛰️ 发布到平台草稿（支持 WeChat API/Playwright）')
+      .option('-P, --platform <name>', '目标平台（默认 wechat）', 'wechat')
+      .option('-m, --method <name>', '发布方式（api|playwright）', 'api')
+      .option('-c, --config <path>', '发布配置 JSON 文件路径')
+      .option('-f, --file <path>', '发布配置 JSON 文件路径（--config 别名）')
+      .option('-C, --content <path>', '内容文件路径（HTML）')
+      .option('-E, --env <path>', '.env 文件路径')
+      .option('-s, --script <path>', '自定义发布脚本路径')
+      .option('-x, --execute', '执行发布（默认 dry-run）')
+      .option('-d, --dry-run', '仅预览（默认）')
+      .addHelpText('after', `
+示例:
+  $ lyra publish --method api --config ./wechat_publish.json --content ./output/article.wechat.html --dry-run
+  $ lyra publish --method api --config ./wechat_publish.json --execute
+  $ lyra publish --method playwright --config ./wechat_publish.json --content ./output/article.wechat.html
+`)
+      .action(async (options) => {
+        await this.handlePublish(options);
       });
 
     // list 命令
@@ -543,6 +583,700 @@ export class CLIInterface {
       
       process.exit(1);
     }
+  }
+
+  private async handlePublish(options: any): Promise<void> {
+    const platform = String(options.platform || 'wechat').toLowerCase();
+    if (platform !== 'wechat') {
+      console.error(`❌ 暂不支持的平台: ${platform}`);
+      process.exit(1);
+    }
+
+    const method = String(options.method || 'api').toLowerCase();
+    if (method !== 'api' && method !== 'playwright') {
+      console.error(`❌ 暂不支持的发布方式: ${method}`);
+      process.exit(1);
+    }
+
+    if (options.execute && options.dryRun) {
+      console.error('❌ 不能同时指定 --execute 与 --dry-run');
+      process.exit(1);
+    }
+
+    let configPath = options.config || options.file;
+    if (!configPath) {
+      configPath = await this.findConfigFile();
+    }
+    if (!configPath) {
+      if (process.stdout.isTTY) {
+        const prompts = await import('@clack/prompts');
+        prompts.intro('🛰️ 发布到平台草稿');
+        const picked = await prompts.text({
+          message: '发布配置文件路径（JSON）',
+          placeholder: './lyra.config.json',
+        });
+        if (prompts.isCancel(picked) || !picked) {
+          prompts.cancel('已取消发布');
+          return;
+        }
+        configPath = String(picked).trim();
+      } else {
+        console.error('❌ 错误: 未找到配置文件');
+        console.log('💡 提示: 使用 \'lyra init\' 创建配置文件，或通过 --config 指定发布配置');
+        process.exit(1);
+      }
+    }
+
+    const resolvedConfigPath = path.resolve(configPath);
+    const configDir = path.dirname(resolvedConfigPath);
+
+    let publishConfig: Record<string, any> = {};
+    try {
+      const raw = await fs.readFile(resolvedConfigPath, 'utf-8');
+      publishConfig = JSON.parse(raw);
+    } catch (error) {
+      console.error(`❌ 发布配置解析失败: ${resolvedConfigPath}`);
+      console.error(error);
+      process.exit(1);
+    }
+
+    const execute = Boolean(options.execute);
+    const dryRun = !execute;
+
+    const publishDir = publishConfig?.publish?.outputDir
+      ? path.resolve(configDir, publishConfig.publish.outputDir)
+      : path.resolve(process.cwd(), 'publish');
+
+    const scriptRelative = method === 'api'
+      ? publishConfig?.publish?.wechat?.apiScript
+      : publishConfig?.publish?.wechat?.playwrightScript;
+    const scriptPathRaw = options.script
+      ? path.resolve(process.cwd(), options.script)
+      : (scriptRelative ? path.resolve(configDir, scriptRelative) : undefined);
+    const scriptPath = scriptPathRaw || '';
+
+    let contentPath = options.content;
+    if (!contentPath) {
+      contentPath = publishConfig?.publish?.wechat?.contentFile;
+    }
+    if (contentPath) {
+      contentPath = path.resolve(configDir, contentPath);
+    }
+
+    if (!contentPath) {
+      if (process.stdout.isTTY) {
+        const prompts = await import('@clack/prompts');
+        const picked = await prompts.text({
+          message: '内容文件路径（HTML）',
+          placeholder: './Output/article.wechat.html',
+        });
+        if (prompts.isCancel(picked) || !picked) {
+          prompts.cancel('已取消发布');
+          return;
+        }
+        contentPath = path.resolve(process.cwd(), String(picked).trim());
+      } else {
+        console.error('❌ 缺少内容文件路径，请使用 --content 或在发布配置中指定 publish.wechat.contentFile');
+        process.exit(1);
+      }
+    }
+
+    const publishConfigPath = publishConfig?.publish?.wechat?.configFile
+      ? path.resolve(configDir, publishConfig.publish.wechat.configFile)
+      : resolvedConfigPath;
+
+    const envPath = options.env
+      ? path.resolve(process.cwd(), options.env)
+      : (publishConfig?.publish?.wechat?.envFile ? path.resolve(configDir, publishConfig.publish.wechat.envFile) : undefined);
+
+    const publishMode = String(publishConfig?.publish?.wechat?.mode || 'draft').toLowerCase();
+    if (publishMode !== 'draft' && publishMode !== 'publish') {
+      console.error(`❌ 不支持的发布模式: ${publishMode}（仅支持 draft|publish）`);
+      process.exit(1);
+    }
+    const publishAtRaw = publishConfig?.publish?.wechat?.publishAt;
+    const publishAt = publishAtRaw ? this.parsePublishAt(String(publishAtRaw)) : null;
+    if (publishAtRaw && !publishAt) {
+      console.error(`❌ 无效的发布定时: ${publishAtRaw}`);
+      process.exit(1);
+    }
+
+    const useScript = method === 'playwright' || Boolean(scriptPathRaw);
+    const args = useScript ? [
+      scriptPath,
+      '--config', publishConfigPath,
+      '--content', contentPath,
+      '--mode', publishMode,
+    ] : [];
+
+    if (useScript && envPath) {
+      args.push('--env', envPath);
+    }
+
+    if (method === 'playwright' && !scriptPathRaw) {
+      console.error('❌ 缺少 Playwright 发布脚本，请在 publish.wechat.playwrightScript 配置');
+      process.exit(1);
+    }
+
+    if (useScript) {
+      if (dryRun) {
+        args.push('--dry-run');
+      } else {
+        args.push('--execute');
+      }
+
+      try {
+        await fs.access(scriptPath);
+      } catch {
+        console.error(`❌ 发布脚本不存在: ${scriptPath}`);
+        console.log('💡 提示: 使用 --script 指定脚本路径，或安装 lyra-wechat-publisher skill');
+        process.exit(1);
+      }
+    }
+
+    if (!dryRun && process.stdout.isTTY && publishMode === 'publish') {
+      const prompts = await import('@clack/prompts');
+      const proceed = await prompts.confirm({
+        message: '确认执行发布？（将写入平台草稿）',
+        initialValue: true,
+      });
+      if (prompts.isCancel(proceed) || !proceed) {
+        prompts.cancel('已取消发布');
+        return;
+      }
+    }
+
+    console.log('🛰️ 开始发布');
+    console.log(`  • 方式: ${method}`);
+    console.log(`  • 平台: ${platform}`);
+    console.log(`  • 内容: ${contentPath}`);
+    console.log(`  • 配置: ${publishConfigPath}`);
+    console.log(`  • 脚本: ${scriptPath}`);
+    console.log(`  • 模式: ${publishMode}`);
+    if (envPath) {
+      console.log(`  • .env: ${envPath}`);
+    }
+    if (dryRun) {
+      console.log('  • 模式: dry-run');
+    }
+
+    if (publishMode === 'publish' && publishAt && dryRun) {
+      console.log(`  • 定时发布: ${this.formatDateTime(publishAt)}`);
+      console.log('✅ dry-run 结束（未执行发布）');
+      return;
+    }
+
+    if (publishMode === 'publish' && publishAt && !dryRun) {
+      const delayMs = Math.max(0, publishAt.getTime() - Date.now());
+      console.log(`  • 定时发布: ${this.formatDateTime(publishAt)}`);
+      if (delayMs > 0) {
+        await this.sleep(delayMs);
+      }
+    }
+
+    if (useScript) {
+      await this.runPublishScript(args);
+    } else {
+      await this.runPublishApiFlow({
+        publishConfigPath,
+        contentPath,
+        envPath,
+        mode: publishMode,
+        dryRun,
+      });
+    }
+    console.log('✅ 发布流程完成');
+  }
+
+  private loadEnvFile(filePath?: string): void {
+    if (!filePath) {
+      return;
+    }
+    try {
+      const raw = require('fs').readFileSync(filePath, 'utf-8');
+      raw.split(/\r?\n/).forEach((line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return;
+        const normalized = trimmed.startsWith('export ') ? trimmed.slice(7) : trimmed;
+        const idx = normalized.indexOf('=');
+        if (idx === -1) return;
+        const key = normalized.slice(0, idx).trim();
+        const value = normalized.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+        if (key && !process.env[key]) {
+          process.env[key] = value;
+        }
+      });
+    } catch {
+      // ignore missing env file
+    }
+  }
+
+  private async runPublishApiFlow(args: {
+    publishConfigPath: string;
+    contentPath: string;
+    envPath?: string;
+    mode: 'draft' | 'publish';
+    dryRun: boolean;
+  }): Promise<void> {
+    const wechatConfig = await this.readJsonFile(args.publishConfigPath);
+    if (!wechatConfig || typeof wechatConfig !== 'object') {
+      throw new Error(`发布配置解析失败: ${args.publishConfigPath}`);
+    }
+    this.loadEnvFile(args.envPath);
+
+    const html = await fs.readFile(args.contentPath, 'utf-8');
+    const wechatConfigTyped = wechatConfig as Record<string, any>;
+    let payload = this.buildWechatDraftPayload(wechatConfigTyped, html);
+
+    if (args.dryRun) {
+      if (!payload.articles[0].thumb_media_id) {
+        const thumbSource = this.resolveThumbImageSource(wechatConfigTyped);
+        if (thumbSource) {
+          payload = this.assignDraftThumbMedia(payload, '__AUTO_UPLOAD__');
+          console.log('[publish] dry-run: 缺少 thumb_media_id，将尝试自动上传封面图');
+        } else if (this.canAutoGenerateCover(wechatConfigTyped)) {
+          payload = this.assignDraftThumbMedia(payload, '__AUTO_GENERATED__');
+          console.log('[publish] dry-run: 缺少封面图，将自动生成/获取封面图');
+        } else if (this.shouldUsePlaceholderCover(wechatConfigTyped)) {
+          payload = this.assignDraftThumbMedia(payload, '__AUTO_PLACEHOLDER__');
+          console.log('[publish] dry-run: 缺少封面图，将使用占位图生成 thumb_media_id');
+        } else {
+          console.log('[publish] dry-run: 缺少 thumb_media_id，且未提供封面图路径/URL');
+        }
+      }
+      console.log(JSON.stringify({ mode: args.mode, draftPayload: payload }, null, 2));
+      return;
+    }
+
+    const accessToken = (wechatConfig as any).access_token || process.env.WECHAT_ACCESS_TOKEN;
+    if (!accessToken) {
+      throw new Error('缺少 access_token，请在配置或 WECHAT_ACCESS_TOKEN 中提供');
+    }
+
+    if (!payload.articles[0].thumb_media_id) {
+      let thumbSource = this.resolveThumbImageSource(wechatConfigTyped);
+      if (!thumbSource) {
+        thumbSource = await this.resolveAutoCoverSource({
+          config: wechatConfigTyped,
+          html,
+        });
+      }
+      if (!thumbSource && this.shouldUsePlaceholderCover(wechatConfigTyped)) {
+        const placeholderPath = await this.generatePlaceholderCover({
+          title: wechatConfigTyped.title,
+          ratio: String(wechatConfigTyped.cover_ratio || '16:9'),
+        });
+        thumbSource = { type: 'path', value: placeholderPath };
+      }
+      if (!thumbSource) {
+        throw new Error('缺少 thumb_media_id，且未提供封面图路径/URL（thumb_image_path 或 thumb_image_url）');
+      }
+      const uploaded = await this.uploadWechatThumbMedia({
+        baseUrl: wechatConfigTyped.api_base || 'https://api.weixin.qq.com/cgi-bin',
+        accessToken,
+        source: thumbSource,
+        endpoint: wechatConfigTyped.thumb_upload_endpoint || '/material/add_material?type=thumb',
+      });
+      payload = this.assignDraftThumbMedia(payload, uploaded.media_id);
+    }
+
+    const baseUrl = (wechatConfig as any).api_base || 'https://api.weixin.qq.com/cgi-bin';
+    const draftAdd = (wechatConfig as any).draft_add_endpoint || '/draft/add';
+    const draftUrl = `${String(baseUrl).replace(/\/$/, '')}${draftAdd}?access_token=${accessToken}`;
+    const draftResult = await this.fetchJsonWithTimeout(
+      draftUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      60000
+    ) as any;
+
+    if (args.mode !== 'publish') {
+      console.log(JSON.stringify({ draftResult }, null, 2));
+      return;
+    }
+
+    const mediaId = draftResult?.media_id || draftResult?.mediaId;
+    if (!mediaId) {
+      throw new Error('草稿创建未返回 media_id');
+    }
+
+    const publishEndpoint = (wechatConfig as any).publish_endpoint || '/freepublish/submit';
+    const publishUrl = `${String(baseUrl).replace(/\/$/, '')}${publishEndpoint}?access_token=${accessToken}`;
+    const publishResult = await this.fetchJsonWithTimeout(
+      publishUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ media_id: mediaId }),
+      },
+      60000
+    ) as any;
+
+    console.log(JSON.stringify({ draftResult, publishResult }, null, 2));
+  }
+
+  private async readJsonFile(filePath: string): Promise<Record<string, unknown> | null> {
+    try {
+      const raw = await fs.readFile(filePath, 'utf-8');
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  private buildWechatDraftPayload(config: Record<string, any>, html: string): Record<string, any> {
+    if (!config.title) {
+      throw new Error('发布配置缺少 title，请使用独立的 wechat_publish.json 或补充字段');
+    }
+    return {
+      articles: [
+        {
+          title: config.title,
+          author: config.author || '',
+          digest: config.digest || '',
+          content: html,
+          content_source_url: config.source_url || '',
+          thumb_media_id: config.thumb_media_id || '',
+          need_open_comment: Number(config.need_open_comment || 0),
+          only_fans_can_comment: Number(config.only_fans_can_comment || 0),
+        },
+      ],
+    };
+  }
+
+  private resolveThumbImageSource(config: Record<string, any>): { type: 'path' | 'url'; value: string } | null {
+    const fromPath = String(config.thumb_image_path || config.cover_image_path || '').trim();
+    if (fromPath) {
+      return { type: 'path', value: fromPath };
+    }
+    const fromUrl = String(config.thumb_image_url || config.cover_image_url || '').trim();
+    if (fromUrl) {
+      return { type: 'url', value: fromUrl };
+    }
+    return null;
+  }
+
+  private shouldUsePlaceholderCover(config: Record<string, any>): boolean {
+    const flag = config.placeholder_cover ?? config.placeholderCover;
+    if (flag === undefined || flag === null) {
+      return true;
+    }
+    return flag === true;
+  }
+
+  private canAutoGenerateCover(config: Record<string, any>): boolean {
+    const order = this.resolveCoverSourceOrder(config);
+    return order.includes('ai') || order.includes('unsplash');
+  }
+
+  private resolveCoverSourceOrder(config: Record<string, any>): Array<'ai' | 'unsplash' | 'placeholder'> {
+    const raw = config.cover_source_order || config.coverSourceOrder;
+    if (Array.isArray(raw)) {
+      const cleaned = raw
+        .map((item) => String(item || '').trim().toLowerCase())
+        .filter((item) => item === 'ai' || item === 'unsplash' || item === 'placeholder') as Array<
+        'ai' | 'unsplash' | 'placeholder'
+      >;
+      if (cleaned.length > 0) {
+        return cleaned;
+      }
+    }
+    return ['ai', 'unsplash', 'placeholder'];
+  }
+
+  private async resolveAutoCoverSource(args: {
+    config: Record<string, any>;
+    html: string;
+  }): Promise<{ type: 'path' | 'url'; value: string } | null> {
+    const order = this.resolveCoverSourceOrder(args.config);
+    for (const source of order) {
+      if (source === 'ai') {
+        try {
+          const result = await this.tryGenerateCoverFromAI(args.config, args.html);
+          if (result) return result;
+        } catch (error) {
+          console.warn(`[publish] AI 封面生成失败，降级处理: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (source === 'unsplash') {
+        try {
+          const result = await this.tryFetchCoverFromUnsplash(args.config);
+          if (result) return result;
+        } catch (error) {
+          console.warn(`[publish] Unsplash 获取失败，降级处理: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (source === 'placeholder') {
+        const placeholderPath = await this.generatePlaceholderCover({
+          title: args.config.title,
+          ratio: String(args.config.cover_ratio || '16:9'),
+        });
+        return { type: 'path', value: placeholderPath };
+      }
+    }
+    return null;
+  }
+
+  private async tryGenerateCoverFromAI(
+    config: Record<string, any>,
+    html: string
+  ): Promise<{ type: 'path' | 'url'; value: string } | null> {
+    const endpoint = String(config.cover_ai_endpoint || config.coverAiEndpoint || '').trim();
+    if (!endpoint) return null;
+
+    const apiKey = String(
+      config.cover_ai_api_key
+      || process.env[String(config.cover_ai_api_key_env || config.coverAiApiKeyEnv || '')]
+      || ''
+    ).trim();
+    const ratio = String(config.cover_ratio || '16:9');
+    const payload = {
+      title: config.title,
+      content: this.stripHtml(html),
+      prompt: config.cover_prompt || config.coverPrompt || '',
+      ratio,
+    };
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
+    const result = await this.fetchJsonWithTimeout(
+      endpoint,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      },
+      60000
+    ) as any;
+
+    const urlPath = config.cover_ai_response_url || config.coverAiResponseUrl || 'imageUrl';
+    const base64Path = config.cover_ai_response_base64 || config.coverAiResponseBase64 || 'imageBase64';
+    const mimePath = config.cover_ai_response_mime || config.coverAiResponseMime || 'mime';
+    const imageUrl = this.readByPath(result, urlPath);
+    if (typeof imageUrl === 'string' && imageUrl.trim()) {
+      return { type: 'url', value: imageUrl.trim() };
+    }
+    const imageBase64 = this.readByPath(result, base64Path);
+    if (typeof imageBase64 === 'string' && imageBase64.trim()) {
+      const mime = this.readByPath(result, mimePath) || 'image/png';
+      const filePath = await this.writeBase64Temp(imageBase64, String(mime));
+      return { type: 'path', value: filePath };
+    }
+    return null;
+  }
+
+  private async tryFetchCoverFromUnsplash(
+    config: Record<string, any>
+  ): Promise<{ type: 'url'; value: string } | null> {
+    const accessKey = String(
+      config.unsplash_access_key
+      || process.env[String(config.unsplash_access_key_env || '')]
+      || ''
+    ).trim();
+    const query = String(config.unsplash_query || config.cover_unsplash_query || config.title || '').trim();
+    if (!accessKey || !query) return null;
+
+    const apiBase = String(config.unsplash_api_base || 'https://api.unsplash.com').replace(/\/$/, '');
+    const endpoint = String(config.unsplash_search_endpoint || '/search/photos').trim();
+    const orientation = String(config.cover_ratio || '16:9') === '4:3' ? 'landscape' : 'landscape';
+    const url = `${apiBase}${endpoint}?query=${encodeURIComponent(query)}&per_page=1&orientation=${orientation}`;
+
+    const result = await this.fetchJsonWithTimeout(
+      url,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Client-ID ${accessKey}`,
+        },
+      },
+      60000
+    ) as any;
+
+    const imageField = String(config.unsplash_image_field || 'results.0.urls.regular');
+    const imageUrl = this.readByPath(result, imageField);
+    if (typeof imageUrl === 'string' && imageUrl.trim()) {
+      return { type: 'url', value: imageUrl.trim() };
+    }
+    return null;
+  }
+
+  private stripHtml(html: string): string {
+    return String(html || '')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private readByPath(obj: any, pathExpr: string): unknown {
+    if (!pathExpr) return undefined;
+    const parts = String(pathExpr).split('.').filter(Boolean);
+    let current: any = obj;
+    for (const part of parts) {
+      if (current == null) return undefined;
+      if (part.match(/^\d+$/)) {
+        current = current[Number(part)];
+      } else {
+        current = current[part];
+      }
+    }
+    return current;
+  }
+
+  private async writeBase64Temp(base64: string, mime: string): Promise<string> {
+    const ext = mime.includes('png') ? 'png' : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'bin';
+    const filename = `lyra-cover-${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+    const outPath = path.join(os.tmpdir(), filename);
+    const buffer = Buffer.from(base64, 'base64');
+    await fs.writeFile(outPath, buffer);
+    return outPath;
+  }
+  private async generatePlaceholderCover(args: { title: string; ratio: string }): Promise<string> {
+    const ratio = args.ratio === '4:3' ? '4:3' : '16:9';
+    const size = ratio === '4:3' ? { width: 1200, height: 900 } : { width: 1600, height: 900 };
+    const title = String(args.title || 'Untitled').slice(0, 60);
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">\n` +
+      `  <defs>\n` +
+      `    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">\n` +
+      `      <stop offset="0%" stop-color="#0f172a"/>\n` +
+      `      <stop offset="100%" stop-color="#1f2937"/>\n` +
+      `    </linearGradient>\n` +
+      `  </defs>\n` +
+      `  <rect width="100%" height="100%" fill="url(#g)"/>\n` +
+      `  <text x="80" y="160" fill="#e2e8f0" font-size="54" font-family="Arial, sans-serif" font-weight="700">${title}</text>\n` +
+      `  <text x="80" y="230" fill="#94a3b8" font-size="24" font-family="Arial, sans-serif">Cover Placeholder · ${ratio}</text>\n` +
+      `</svg>\n`;
+    const filename = `lyra-cover-${Date.now()}-${Math.random().toString(16).slice(2)}.png`;
+    const outPath = path.join(os.tmpdir(), filename);
+    const sharpModule = await import('sharp');
+    const sharp = (sharpModule as any).default || sharpModule;
+    await sharp(Buffer.from(svg)).png().toFile(outPath);
+    return outPath;
+  }
+
+  private assignDraftThumbMedia(payload: Record<string, any>, mediaId: string): Record<string, any> {
+    const cloned = JSON.parse(JSON.stringify(payload));
+    if (cloned?.articles?.[0]) {
+      cloned.articles[0].thumb_media_id = mediaId;
+    }
+    return cloned;
+  }
+
+  private async uploadWechatThumbMedia(args: {
+    baseUrl: string;
+    accessToken: string;
+    source: { type: 'path' | 'url'; value: string };
+    endpoint: string;
+  }): Promise<{ media_id: string }> {
+    const urlBase = String(args.baseUrl || 'https://api.weixin.qq.com/cgi-bin').replace(/\/$/, '');
+    const endpoint = String(args.endpoint || '').trim();
+    const uploadUrl = `${urlBase}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}&access_token=${args.accessToken}`;
+
+    const form = new FormData();
+    let buffer: ArrayBuffer;
+    let filename = 'cover.jpg';
+    let mime = 'image/jpeg';
+
+    if (args.source.type === 'path') {
+      const filePath = path.resolve(process.cwd(), args.source.value);
+      const data = await fs.readFile(filePath);
+      buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      filename = path.basename(filePath);
+      mime = this.inferImageMime(filename);
+    } else {
+      const response = await fetch(args.source.value);
+      if (!response.ok) {
+        throw new Error(`封面图 URL 获取失败: ${response.status}`);
+      }
+      buffer = await response.arrayBuffer();
+      const contentType = response.headers.get('content-type');
+      if (contentType) {
+        mime = contentType.split(';')[0];
+      }
+    }
+
+    form.append('media', new Blob([buffer], { type: mime }), filename);
+
+    const result = await this.fetchJsonWithTimeout(
+      uploadUrl,
+      {
+        method: 'POST',
+        body: form as any,
+      },
+      60000
+    ) as any;
+
+    const mediaId = result?.media_id;
+    if (!mediaId) {
+      throw new Error('上传封面图失败，未返回 media_id');
+    }
+    return { media_id: mediaId };
+  }
+
+  private inferImageMime(filename: string): string {
+    const ext = path.extname(filename).toLowerCase();
+    if (ext === '.png') return 'image/png';
+    if (ext === '.gif') return 'image/gif';
+    if (ext === '.jpeg' || ext === '.jpg') return 'image/jpeg';
+    return 'image/jpeg';
+  }
+
+  private parsePublishAt(raw: string): Date | null {
+    const value = String(raw || '').trim();
+    if (!value) {
+      return null;
+    }
+    if (value.includes('T')) {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    const normalized = value.replace(' ', 'T');
+    const withSeconds = normalized.match(/:\d{2}$/) ? normalized : `${normalized}:00`;
+    const parsed = new Date(withSeconds);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private formatDateTime(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private runPublishScript(args: string[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const scriptPath = args[0];
+      const ext = path.extname(scriptPath).toLowerCase();
+      let command = 'python3';
+      let commandArgs = args;
+      if (ext === '.js' || ext === '.mjs' || ext === '.cjs') {
+        command = 'node';
+        commandArgs = [scriptPath, ...args.slice(1)];
+      } else if (ext === '.py') {
+        command = 'python3';
+      }
+
+      const child = spawn(command, commandArgs, { stdio: 'inherit' });
+      child.on('error', (error) => reject(error));
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`发布脚本退出码 ${code}`));
+        }
+      });
+    });
   }
 
   /**
@@ -1747,6 +2481,7 @@ export class CLIInterface {
           runtimeConfig,
           requirements,
           lengthConstraint,
+          imageRatio: this.resolveCoverRatio(runtimeConfig.articleImage.ratio),
         });
         generatedArticle = await this.ensureArticlePromptCompliance({
           payload: generatedArticle,
@@ -1778,12 +2513,20 @@ export class CLIInterface {
             `${logPrefix} 正文字数（不含生图提示词）: ${finalContentLength}`
           );
         }
+        generatedArticle = await this.maybeGenerateArticleCoverImage({
+          payload: generatedArticle,
+          runtimeConfig,
+          moduleConfig,
+          moduleName: moduleLabel || moduleName || '生活志',
+          platform: platformKey,
+        });
       }
 
       const finalOutput =
         generatedArticle
           ? this.formatGeneratedArticleMarkdown(generatedArticle, {
               moduleName: moduleLabel || moduleName || '生活志',
+              insertCoverImage: runtimeConfig.articleImage.insertCoverImage !== false,
             })
           : rendered;
 
@@ -1900,6 +2643,7 @@ export class CLIInterface {
       outputBaseDir,
     });
     const articleAI = this.resolveArticleAIConfig(templateConfig?.ai, prompting);
+    const articleImage = this.resolveArticleImageConfig(templateConfig?.ai, prompting);
 
     return {
       configPath: configPath || undefined,
@@ -1938,6 +2682,7 @@ export class CLIInterface {
         configDir
       ),
       articleAI,
+      articleImage,
       outputDraftsDirName:
         typeof prompting.outputDraftsDirName === 'string' && prompting.outputDraftsDirName.trim()
           ? prompting.outputDraftsDirName.trim()
@@ -2026,6 +2771,9 @@ export class CLIInterface {
       const promptFile = typeof moduleValue.promptFile === 'string' && moduleValue.promptFile.trim()
         ? moduleValue.promptFile.trim()
         : undefined;
+      const coverPrompt = typeof moduleValue.coverPrompt === 'string' && moduleValue.coverPrompt.trim()
+        ? moduleValue.coverPrompt.trim()
+        : undefined;
       const sources = Array.isArray(moduleValue.sources)
         ? moduleValue.sources
             .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
@@ -2058,6 +2806,7 @@ export class CLIInterface {
         promptFile,
         platformPromptFiles,
         sources,
+        coverPrompt,
       };
     }
 
@@ -2149,6 +2898,37 @@ export class CLIInterface {
       maxRetries: this.parsePositiveInt(promptingAI.maxRetries || ai.maxRetries, 2),
       temperature: this.parseTemperature(promptingAI.temperature ?? ai.temperature, 0.7),
       maxTokens: this.parsePositiveInt(promptingAI.maxTokens || ai.maxTokens, 2000),
+    };
+  }
+
+  private resolveArticleImageConfig(templateAI: unknown, prompting: Record<string, any>): ArticleImageConfig {
+    const ai = (templateAI && typeof templateAI === 'object')
+      ? (templateAI as Record<string, unknown>)
+      : {};
+    const templateImage = (ai.articleImage && typeof ai.articleImage === 'object')
+      ? (ai.articleImage as Record<string, unknown>)
+      : {};
+    const promptingImage = (prompting.articleImage && typeof prompting.articleImage === 'object')
+      ? (prompting.articleImage as Record<string, unknown>)
+      : {};
+
+    const enabled = (promptingImage.enabled ?? templateImage.enabled ?? false) !== false;
+    const ratioRaw = String(promptingImage.ratio || templateImage.ratio || '16:9').trim();
+    const ratio = ratioRaw === '4:3' ? '4:3' : '16:9';
+
+    return {
+      enabled,
+      provider: 'script',
+      script: String(promptingImage.script || templateImage.script || '').trim() || undefined,
+      ratio,
+      outputDir: String(promptingImage.outputDir || templateImage.outputDir || '').trim() || undefined,
+      insertCoverImage: (promptingImage.insertCoverImage ?? templateImage.insertCoverImage ?? true) !== false,
+      promptDir: String(promptingImage.promptDir || templateImage.promptDir || '').trim() || undefined,
+      promptMap: (promptingImage.promptMap && typeof promptingImage.promptMap === 'object')
+        ? (promptingImage.promptMap as Record<string, string>)
+        : (templateImage.promptMap && typeof templateImage.promptMap === 'object')
+          ? (templateImage.promptMap as Record<string, string>)
+          : undefined,
     };
   }
 
@@ -3419,6 +4199,7 @@ export class CLIInterface {
     runtimeConfig: ResolvedPromptRuntimeConfig;
     requirements: string;
     lengthConstraint?: LengthConstraint;
+    imageRatio?: '4:3' | '16:9';
   }): Promise<GeneratedArticlePayload> {
     const ai = args.runtimeConfig.articleAI;
     if (!ai.enabled) {
@@ -3454,6 +4235,7 @@ export class CLIInterface {
     platform: string;
     requirements: string;
     lengthConstraint?: LengthConstraint;
+    imageRatio?: '4:3' | '16:9';
   }): string {
     const lengthConstraintLine = this.describeLengthConstraint(args.lengthConstraint);
     return [
@@ -3470,6 +4252,7 @@ export class CLIInterface {
       `- 选题：${args.idea}`,
       `- 模块：${args.moduleName}`,
       `- 平台：${args.platform}`,
+      `- 头图比例：${args.imageRatio || '4:3'}`,
       `- 用户临时要求：${args.requirements || '无'}`,
       ...(lengthConstraintLine ? [`- 正文字数硬约束：${lengthConstraintLine}（仅统计 content 正文）`] : []),
       '- title 需可直接作为文件名，不要以“日期-平台-模块”开头。',
@@ -3819,7 +4602,7 @@ export class CLIInterface {
 
   private formatGeneratedArticleMarkdown(
     payload: GeneratedArticlePayload,
-    args: { moduleName: string }
+    args: { moduleName: string; insertCoverImage: boolean }
   ): string {
     const normalizedTitle = String(payload.title || '').trim() || '未命名文章';
     const normalizedModule = String(args.moduleName || '').trim() || '生活志';
@@ -3831,6 +4614,12 @@ export class CLIInterface {
     const readMinutes = Math.max(1, Math.ceil(bodyChars / 350));
     const tipLine = `✨ 温馨提示：本文约${bodyChars}字，预计阅读时间${readMinutes}分钟。`;
     const escapedTitle = this.escapeYamlDoubleQuoted(normalizedTitle);
+    const coverImage = payload.coverImage ? this.escapeYamlDoubleQuoted(payload.coverImage) : '';
+    const coverRatio = payload.coverImageRatio ? this.escapeYamlDoubleQuoted(payload.coverImageRatio) : '';
+
+    const coverMarkdown = payload.coverImage && args.insertCoverImage
+      ? `![${this.escapeYamlDoubleQuoted(normalizedTitle)}](${payload.coverImage})\n\n`
+      : '';
 
     return [
       '---',
@@ -3842,10 +4631,13 @@ export class CLIInterface {
       '  - para/output',
       '  - type/output-note',
       `image_prompt_nanobana_pro: "${this.escapeYamlDoubleQuoted(payload.imagePromptNanobanaPro || '')}"`,
+      ...(coverImage ? [`cover_image: "${coverImage}"`] : []),
+      ...(coverRatio ? [`cover_image_ratio: "${coverRatio}"`] : []),
       '---',
       '',
       tipLine,
       '',
+      coverMarkdown,
       body,
       '',
     ].join('\n');
@@ -3884,6 +4676,13 @@ export class CLIInterface {
       minChars: fromRequirements.minChars ?? fromPrompt.minChars,
       maxChars: fromRequirements.maxChars ?? fromPrompt.maxChars,
     });
+  }
+
+  private resolveCoverRatio(input?: string): '4:3' | '16:9' {
+    if (input === '4:3') {
+      return '4:3';
+    }
+    return '16:9';
   }
 
   private extractLengthConstraintFromText(text: string): LengthConstraint {
@@ -4257,6 +5056,192 @@ export class CLIInterface {
       throw new Error(`生成内容未满足 Prompt 约束: ${finalViolations.join('；')}`);
     }
     return current;
+  }
+
+  private async maybeGenerateArticleCoverImage(args: {
+    payload: GeneratedArticlePayload;
+    runtimeConfig: ResolvedPromptRuntimeConfig;
+    moduleConfig?: PromptModuleConfig;
+    moduleName: string;
+    platform: string;
+  }): Promise<GeneratedArticlePayload> {
+    const coverEnabled = args.runtimeConfig.articleImage.enabled;
+    if (!coverEnabled) {
+      return args.payload;
+    }
+
+    const ratio = this.resolveCoverRatio(
+      String(args.runtimeConfig.articleImage.ratio || '16:9')
+    );
+
+    const scriptPathRaw = args.runtimeConfig.articleImage.script;
+    if (!scriptPathRaw) {
+      console.error('❌ 缺少头图生成脚本，请在 ai.prompting.articleImage.script 配置');
+      process.exit(1);
+    }
+    const scriptPath = path.resolve(
+      args.runtimeConfig.configDir || process.cwd(),
+      scriptPathRaw
+    );
+
+    const moduleLabel = args.moduleConfig?.label || args.moduleName || 'article';
+    const publishDir = args.moduleConfig?.publishDir
+      || path.resolve(args.runtimeConfig.outputBaseDir, this.resolveModuleDirectoryName(moduleLabel));
+    const coverDir = args.runtimeConfig.articleImage.outputDir
+      ? path.resolve(args.runtimeConfig.configDir || process.cwd(), args.runtimeConfig.articleImage.outputDir)
+      : path.resolve(publishDir, 'images');
+    const coverFileName = `${this.sanitizeTitleFilename(args.payload.title)}-cover-${ratio.replace(':', 'x')}.svg`;
+    const coverOutput = path.resolve(coverDir, coverFileName);
+
+    await fs.mkdir(path.dirname(coverOutput), { recursive: true });
+
+    const coverPrompt = await this.resolveCoverPrompt({
+      runtimeConfig: args.runtimeConfig,
+      moduleConfig: args.moduleConfig,
+      moduleName: moduleLabel,
+      platform: args.platform,
+      fallbackPrompt: args.payload.imagePromptNanobanaPro,
+    });
+
+    const inputPayload = {
+      title: args.payload.title,
+      content: args.payload.content,
+      prompt: coverPrompt,
+      ratio,
+      module: moduleLabel,
+      platform: args.platform,
+      outputPath: coverOutput,
+    };
+
+    const inputFile = path.join(
+      os.tmpdir(),
+      `lyra-cover-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
+    );
+    await fs.writeFile(inputFile, JSON.stringify(inputPayload, null, 2), 'utf-8');
+
+    const result = await this.runCoverScript(scriptPath, inputFile);
+    const coverImage = result.coverImage || coverOutput;
+    try {
+      await fs.access(coverImage);
+    } catch {
+      console.warn(`[cover] 头图文件未找到: ${coverImage}`);
+    }
+
+    return {
+      ...args.payload,
+      coverImage,
+      coverImageRatio: ratio,
+    };
+  }
+
+  private async resolveCoverPrompt(args: {
+    runtimeConfig: ResolvedPromptRuntimeConfig;
+    moduleConfig?: PromptModuleConfig;
+    moduleName: string;
+    platform: string;
+    fallbackPrompt: string;
+  }): Promise<string> {
+    if (args.moduleConfig?.coverPrompt) {
+      return String(args.moduleConfig.coverPrompt).trim() || args.fallbackPrompt;
+    }
+
+    const moduleKey = args.moduleConfig?.key || args.moduleName;
+    const promptMap = args.runtimeConfig.articleImage.promptMap || {};
+    const mapped = moduleKey && promptMap[moduleKey] ? promptMap[moduleKey] : undefined;
+
+    const promptDirs: string[] = [];
+    const promptDirRaw = args.runtimeConfig.articleImage.promptDir;
+    if (promptDirRaw) {
+      const resolved = this.resolvePathFromConfig(args.runtimeConfig.configDir, promptDirRaw)
+        || path.resolve(process.cwd(), promptDirRaw);
+      promptDirs.push(resolved);
+    }
+    if (args.moduleConfig?.publishDir) {
+      promptDirs.push(args.moduleConfig.publishDir);
+    }
+    if (promptDirs.length === 0) {
+      return args.fallbackPrompt;
+    }
+
+    const candidates = [
+      mapped,
+      moduleKey ? `${moduleKey}.prompt.md` : undefined,
+      moduleKey ? `${moduleKey}.md` : undefined,
+      args.platform ? `cover.prompt.${args.platform}.md` : undefined,
+      'cover.prompt.wechat.md',
+      'cover.prompt.md',
+      args.platform ? `prompt.${args.platform}.md` : undefined,
+      'prompt.wechat.md',
+      'prompt.md',
+    ].filter(Boolean) as string[];
+
+    for (const dir of promptDirs) {
+      for (const candidate of candidates) {
+        const filePath = path.resolve(dir, candidate);
+        if (await this.fileExists(filePath)) {
+          const content = (await fs.readFile(filePath, 'utf-8')).trim();
+          if (content) {
+            return content;
+          }
+        }
+      }
+    }
+
+    return args.fallbackPrompt;
+  }
+
+  private async runCoverScript(scriptPath: string, inputFile: string): Promise<Record<string, any>> {
+    try {
+      await fs.access(scriptPath);
+    } catch {
+      console.error(`❌ 头图脚本不存在: ${scriptPath}`);
+      process.exit(1);
+    }
+
+    const ext = path.extname(scriptPath).toLowerCase();
+    let command = scriptPath;
+    let args = ['--input', inputFile];
+    if (ext === '.py') {
+      command = 'python3';
+      args = [scriptPath, '--input', inputFile];
+    } else if (ext === '.js' || ext === '.mjs' || ext === '.cjs') {
+      command = 'node';
+      args = [scriptPath, '--input', inputFile];
+    }
+
+    const output = await this.spawnAndCollect(command, args);
+    const trimmed = output.trim();
+    if (!trimmed) {
+      return {};
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      console.warn(`[cover] 脚本输出不是 JSON，已忽略: ${error instanceof Error ? error.message : String(error)}`);
+      return {};
+    }
+  }
+
+  private spawnAndCollect(command: string, args: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, args);
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += String(chunk);
+      });
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve(stdout);
+        } else {
+          reject(new Error(stderr || `头图脚本退出码 ${code}`));
+        }
+      });
+    });
   }
 
   private detectPromptViolations(
