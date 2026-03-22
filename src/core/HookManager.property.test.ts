@@ -44,6 +44,7 @@ describe('HookManager Property Tests', () => {
           ),
           fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
           async (hookType, hookName) => {
+            hookManager.clearHooks();
             // 创建有效的 hook 文件
             const hookPath = path.join(testDir, `${hookName}.js`);
             const hookContent = `
@@ -83,6 +84,7 @@ module.exports = function(context) {
             'afterRender'
           ], { minLength: 1, maxLength: 5 }),
           async (hookTypes) => {
+            hookManager.clearHooks();
             // 为每个钩子类型创建文件并注册
             for (const hookType of hookTypes) {
               const hookPath = path.join(testDir, `${hookType}.js`);

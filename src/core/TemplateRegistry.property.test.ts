@@ -75,8 +75,12 @@ describe('TemplateRegistry Property Tests', () => {
             try {
               registry.registerTemplate(templateName, MockDataProvider);
             } catch (error) {
-              expect(error.code).toBe(ErrorCode.E011);
-              expect(error.message).toContain(templateName);
+              if (error instanceof RegistryError) {
+                expect(error.code).toBe(ErrorCode.E011);
+                expect(error.message).toContain(templateName);
+              } else {
+                throw error;
+              }
             }
           }
         ),

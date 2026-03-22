@@ -135,6 +135,7 @@ Provider 说明：
 
 - `openai`：需要 `OPENAI_API_KEY`
 - `anthropic`：需要 `ANTHROPIC_API_KEY`
+- `gemini`：需要 `GEMINI_API_KEY`（或 `GOOGLE_API_KEY`）
 - `local`：本地模型服务
 
 ## 配置发现规则

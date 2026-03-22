@@ -147,7 +147,7 @@ describe('DataSourceManager', () => {
       };
       const result = DataSourceManager.normalize(input);
       
-      expect(result[0].include).toEqual([]);
+      expect(result[0].include).toEqual(['**/*.md']);
       expect(result[0].exclude).toEqual([]);
     });
   });

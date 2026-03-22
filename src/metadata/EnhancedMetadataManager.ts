@@ -103,7 +103,7 @@ export class EnhancedMetadataManager extends MetadataManager {
     try {
       // 验证必需字段
       const title = this.parseRequiredString(frontmatter.title, 'title');
-      const images = this.parseOptionalArray(frontmatter.images) || [];
+      const images = this.parseRequiredArray(frontmatter.images, 'images');
       const date = this.parseRequiredDate(
         frontmatter.date || frontmatter.created,
         'date'
@@ -140,7 +140,7 @@ export class EnhancedMetadataManager extends MetadataManager {
     try {
       // 验证必需字段
       const title = this.parseRequiredString(frontmatter.title, 'title');
-      const images = this.parseOptionalArray(frontmatter.images) || [];
+      const images = this.parseRequiredArray(frontmatter.images, 'images');
       const date = this.parseRequiredDate(
         frontmatter.date || frontmatter.created,
         'date'

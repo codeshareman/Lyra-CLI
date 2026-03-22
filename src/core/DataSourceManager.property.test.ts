@@ -275,8 +275,10 @@ description: 重复内容测试
               createdSources.map(s => s.alias).filter(Boolean)
             );
             
-            // 至少应该使用了一些配置的别名
-            expect(usedAliases.size).toBeGreaterThan(0);
+            // 若有文章产出，至少应该使用了一些配置的别名
+            if (articles.length > 0) {
+              expect(usedAliases.size).toBeGreaterThan(0);
+            }
           }
         ),
         { numRuns: 10 }

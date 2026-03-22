@@ -103,6 +103,7 @@ Provider notes:
 
 - `openai`: requires `OPENAI_API_KEY`
 - `anthropic`: requires `ANTHROPIC_API_KEY`
+- `gemini`: requires `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
 - `local`: uses local model endpoint
 
 ## Configuration Discovery

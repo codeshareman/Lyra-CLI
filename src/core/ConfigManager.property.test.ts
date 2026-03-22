@@ -47,6 +47,8 @@ describe('ConfigManager Property Tests', () => {
             afterRender: fc.constant('hooks/afterRender.js')
           }),
           async (hookConfig) => {
+            const localHookManager = new HookManager();
+            const localConfigManager = new ConfigManager(localHookManager);
             // 创建 hook 文件
             for (const [hookType, hookPath] of Object.entries(hookConfig)) {
               const fullPath = path.join(testDir, hookPath);
@@ -86,16 +88,18 @@ module.exports = function(context) {
             await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
 
             // 加载配置
-            const loadedConfig = await configManager.load(configPath);
-            const templateConfig = configManager.getTemplateConfig('weekly');
+            const loadedConfig = await localConfigManager.load(configPath);
+            const templateConfig = localConfigManager.getTemplateConfig('weekly');
 
             // 验证所有 hooks 都被正确注册
             for (const hookType of Object.keys(hookConfig)) {
-              expect(hookManager.hasHook(hookType as any)).toBe(true);
+              expect(localHookManager.hasHook(hookType as any)).toBe(true);
             }
 
             // 验证配置正确加载
-            expect(templateConfig).toBeDefined();
+            if (!templateConfig) {
+              throw new Error('templateConfig should not be null');
+            }
             expect(templateConfig.hooks).toBeDefined();
             expect(Object.keys(templateConfig.hooks!)).toHaveLength(Object.keys(hookConfig).length);
           }
@@ -120,6 +124,8 @@ module.exports = function(context) {
             'afterRender'
           ], { minLength: 1, maxLength: 5 }),
           async (selectedHooks) => {
+            const localHookManager = new HookManager();
+            const localConfigManager = new ConfigManager(localHookManager);
             const hookConfig: Record<string, string> = {};
             
             // 创建选中的 hook 文件
@@ -164,11 +170,11 @@ module.exports = function(context) {
             await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
 
             // 加载配置
-            await configManager.load(configPath);
+            await localConfigManager.load(configPath);
 
             // 验证只有选中的 hooks 被注册
             for (const hookType of selectedHooks) {
-              expect(hookManager.hasHook(hookType as any)).toBe(true);
+              expect(localHookManager.hasHook(hookType as any)).toBe(true);
             }
 
             // 验证未选中的 hooks 没有被注册
@@ -180,7 +186,7 @@ module.exports = function(context) {
             
             for (const hookType of allHooks) {
               if (!selectedHooks.includes(hookType)) {
-                expect(hookManager.hasHook(hookType as any)).toBe(false);
+                expect(localHookManager.hasHook(hookType as any)).toBe(false);
               }
             }
           }
@@ -433,6 +439,7 @@ module.exports = function(context) {
             // 模拟合并过程
             const configManager = new ConfigManager();
             const merged = (configManager as any).mergeWithDefaults(userConfig);
+            const defaults = (configManager as any).getDefaultConfig();
 
             // 验证用户配置优先级更高
             expect(merged.global.logLevel).toBe(testData.userLogLevel);
@@ -440,8 +447,8 @@ module.exports = function(context) {
             expect(merged.templates.weekly.template.path).toBe(testData.userTemplatePath);
             
             // 验证未覆盖的配置保持默认值
-            expect(merged.templates.weekly.enabled).toBe(testData.templateEnabled);
-            expect(merged.templates.weekly.sources.articles).toBe('/default/articles');
+            expect(merged.templates.weekly.enabled).toBe(defaults.templates.weekly.enabled);
+            expect(merged.templates.weekly.sources).toEqual(defaults.templates.weekly.sources);
           }
         ),
         { numRuns: 20 }

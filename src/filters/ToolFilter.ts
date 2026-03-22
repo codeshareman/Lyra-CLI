@@ -427,11 +427,11 @@ export class ToolFilter implements IToolFilter {
    * @returns 按分类分组的工具映射
    */
   private groupByCategory(tools: Tool[]): Record<string, Tool[]> {
-    const grouped: Record<string, Tool[]> = {};
+    const grouped: Record<string, Tool[]> = Object.create(null);
 
     for (const tool of tools) {
       const category = tool.category || 'Uncategorized';
-      if (!grouped[category]) {
+      if (!Object.prototype.hasOwnProperty.call(grouped, category)) {
         grouped[category] = [];
       }
       grouped[category].push(tool);

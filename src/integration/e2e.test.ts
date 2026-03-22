@@ -100,10 +100,10 @@ describe('End-to-End Integration Tests', () => {
       expect(content).toMatch(/issue_number:|issueNumber:|issue:/);
       
       // 验证内容结构
-      expect(content).toContain('# Weekly');
-      expect(content).toContain('## 📚 精选文章');
+      expect(content).toContain('Z°N VOYAGE LOG');
+      expect(content).toContain('## 精读文章');
       // 工具部分可能为空，不强制要求
-      expect(content).toContain('## 📊');
+      expect(content).toContain('## 技术与生产力');
     });
 
     it('应该在 dry-run 模式下不创建文件', async () => {

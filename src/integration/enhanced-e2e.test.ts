@@ -128,14 +128,14 @@ describe('Enhanced Weekly E2E Integration', () => {
 
     const content = await fs.readFile(result.filePath!, 'utf-8');
 
-    expect(content).toContain('## 📅 本周动态');
-    expect(content).toContain('## 📚 精读与输入');
-    expect(content).toContain('## 🛠️ 技术与生产力');
-    expect(content).toContain('## 🖼️ 生活瞬间');
-    expect(content).toContain('## 🍴 饮食记录');
-    expect(content).toContain('## 🏸 运动记录');
-    expect(content).toContain('## 🎵 本周旋律');
-    expect(content).toContain('## 💬 随感');
+    expect(content).toContain('## 本周动态');
+    expect(content).toContain('## 精读文章');
+    expect(content).toContain('## 技术与生产力');
+    expect(content).toContain('## 生活瞬间');
+    expect(content).toContain('## 饮食记录');
+    expect(content).toContain('## 运动记录');
+    expect(content).toContain('## 本周旋律');
+    expect(content).toContain('## 随感');
   });
 
   it('should support selective module enablement', async () => {
@@ -161,10 +161,10 @@ describe('Enhanced Weekly E2E Integration', () => {
     expect(result.success).toBe(true);
     const content = await fs.readFile(result.filePath!, 'utf-8');
 
-    expect(content).toContain('## 📚 精读与输入');
-    expect(content).not.toContain('## 🛠️ 技术与生产力');
-    expect(content).not.toContain('## 🖼️ 生活瞬间');
-    expect(content).not.toContain('## 🍴 饮食记录');
+    expect(content).toContain('## 精读文章');
+    expect(content).not.toContain('## 技术与生产力');
+    expect(content).not.toContain('## 生活瞬间');
+    expect(content).not.toContain('## 饮食记录');
   });
 
   it('should support multi-format export from generated markdown', async () => {
@@ -214,9 +214,9 @@ describe('Enhanced Weekly E2E Integration', () => {
     const firstContent = await fs.readFile(first.filePath!, 'utf-8');
     const secondContent = await fs.readFile(second.filePath!, 'utf-8');
 
-    expect(firstContent).toContain('## 📚 精读与输入');
+    expect(firstContent).toContain('## 精读文章');
     expect(firstContent).toContain('个人回响');
-    expect(secondContent).toContain('## 📚 精读与输入');
+    expect(secondContent).toContain('## 精读文章');
   });
 
   it('should keep legacy config usable after migration', async () => {
@@ -267,7 +267,7 @@ describe('Enhanced Weekly E2E Integration', () => {
 
     expect(result.success).toBe(true);
     const content = await fs.readFile(result.filePath!, 'utf-8');
-    expect(content).toContain('# Weekly');
+    expect(content).toContain('Z°N VOYAGE LOG');
   });
 });
 

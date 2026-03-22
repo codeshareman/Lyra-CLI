@@ -112,21 +112,21 @@ describe('Weekly Unified Template Property Tests', () => {
 
             const result = await templateEngine.render(templatePath, data);
 
-            // 单模板模式下，模块标题固定渲染
-            expect(result.includes('## 📌 本周动态')).toBe(true);
-            expect(result.includes('## 📚 精读与输入')).toBe(true);
-            expect(result.includes('## 🛠️ 技术与生产力')).toBe(true);
-            expect(result.includes('## 🖼️ 生活瞬间')).toBe(true);
-            expect(result.includes('## 📦 好物推荐')).toBe(true);
-            expect(result.includes('## 🍴 饮食记录')).toBe(true);
-            expect(result.includes('## 🏃 运动记录')).toBe(true);
-            expect(result.includes('## 🎵 本周旋律')).toBe(true);
-            expect(result.includes('## 💬 随感')).toBe(true);
+            // 模块标题仅在有内容时渲染
+            expect(result.includes('## 本周动态')).toBe(enabled.weeklyUpdates);
+            expect(result.includes('## 精读文章')).toBe(enabled.reading);
+            expect(result.includes('## 技术与生产力')).toBe(enabled.tech);
+            expect(result.includes('## 生活瞬间')).toBe(enabled.life);
+            expect(result.includes('## 购物与好物')).toBe(enabled.products);
+            expect(result.includes('## 饮食记录')).toBe(enabled.food);
+            expect(result.includes('## 运动记录')).toBe(enabled.exercise);
+            expect(result.includes('## 本周旋律')).toBe(enabled.music);
+            expect(result.includes('## 随感')).toBe(enabled.thoughts);
 
             // 有内容时应出现对应内容标识
             expect(result.includes('### WU')).toBe(enabled.weeklyUpdates);
             expect(result.includes('### [R](https://example.com/r)')).toBe(enabled.reading);
-            expect(result.includes('### [T](https://example.com/t) - 工具')).toBe(enabled.tech);
+            expect(result.includes('### [T](https://example.com/t)')).toBe(enabled.tech);
             expect(result.includes('### L')).toBe(enabled.life);
             expect(result.includes('### P')).toBe(enabled.products);
             expect(result.includes('### F')).toBe(enabled.food);
@@ -192,15 +192,15 @@ describe('Weekly Unified Template Property Tests', () => {
             const result = await templateEngine.render(templatePath, data);
 
             const expectedHeadingByModule: Record<string, string> = {
-              weeklyUpdates: '## 📌 本周动态',
-              reading: '## 📚 精读与输入',
-              tech: '## 🛠️ 技术与生产力',
-              life: '## 🖼️ 生活瞬间',
-              products: '## 📦 好物推荐',
-              food: '## 🍴 饮食记录',
-              exercise: '## 🏃 运动记录',
-              music: '## 🎵 本周旋律',
-              thoughts: '## 💬 随感',
+              weeklyUpdates: '## 本周动态',
+              reading: '## 精读文章',
+              tech: '## 技术与生产力',
+              life: '## 生活瞬间',
+              products: '## 购物与好物',
+              food: '## 饮食记录',
+              exercise: '## 运动记录',
+              music: '## 本周旋律',
+              thoughts: '## 随感',
             };
 
             expect(result).toContain(expectedHeadingByModule[moduleName]);

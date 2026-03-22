@@ -40,7 +40,7 @@ export interface SummaryOptions {
  */
 export interface AIProviderConfig {
   /** 提供者类型 */
-  provider: 'openai' | 'anthropic' | 'local';
+  provider: 'openai' | 'anthropic' | 'local' | 'gemini' | 'google';
   /** API 密钥 */
   apiKey?: string;
   /** 模型名称 */

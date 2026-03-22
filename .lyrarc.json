@@ -1,0 +1,17 @@
+{
+  "global": {
+    "logLevel": "info",
+    "defaultTemplate": "weekly",
+    "ai": {
+      "enabled": true,
+      "provider": "gemini",
+      "model": "gemini-1.5-flash",
+      "timeout": 60000,
+      "maxRetries": 2,
+      "summaries": {
+        "enabled": true,
+        "maxLength": 180
+      }
+    }
+  }
+}

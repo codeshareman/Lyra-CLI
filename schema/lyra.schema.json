@@ -64,7 +64,7 @@
       "additionalProperties": true,
       "properties": {
         "enabled": { "type": "boolean", "description": "是否启用 AI" },
-        "provider": { "type": "string", "description": "AI Provider 标识（如 local / openai / google）" },
+        "provider": { "type": "string", "description": "AI Provider 标识（如 local / openai / anthropic / gemini）" },
         "model": { "type": "string", "description": "模型名称或标识" },
         "baseUrl": { "type": "string", "description": "Provider Base URL" },
         "apiKey": { "type": "string", "description": "API Key（或留空走环境变量）" },

@@ -68,13 +68,20 @@ This category contains ${tools.length} tools.
         fc.asyncProperty(
           fc.array(
             fc.record({
-              category: fc.string({ minLength: 1, maxLength: 30 }).filter(s => s.trim().length > 0),
+              category: fc.string({ minLength: 1, maxLength: 30 })
+                .filter(s =>
+                  s.trim().length > 0 &&
+                  s.trim() === s &&
+                  !s.startsWith('.') &&
+                  !s.includes('/') &&
+                  !s.includes('\\')
+                ),
               tools: fc.array(
                 fc.record({
                   title: fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
                   url: fc.webUrl(),
                   rating: fc.integer({ min: 0, max: 5 }),
-                  description: fc.option(fc.string({ maxLength: 200 }))
+                  description: fc.option(fc.string({ maxLength: 200 }), { nil: undefined })
                 }),
                 { minLength: 1, maxLength: 10 }
               )
@@ -93,15 +100,14 @@ This category contains ${tools.length} tools.
             const result = await filter.filter({ perCategory });
 
             // 验证每个分类的工具数量不超过 perCategory
-            const resultByCategory: Record<string, Tool[]> = {};
+            const resultByCategory = new Map<string, Tool[]>();
             for (const tool of result) {
-              if (!resultByCategory[tool.category]) {
-                resultByCategory[tool.category] = [];
-              }
-              resultByCategory[tool.category].push(tool);
+              const list = resultByCategory.get(tool.category) || [];
+              list.push(tool);
+              resultByCategory.set(tool.category, list);
             }
 
-            for (const [category, tools] of Object.entries(resultByCategory)) {
+            for (const [category, tools] of resultByCategory.entries()) {
               expect(tools.length).toBeLessThanOrEqual(perCategory);
               
               // 验证该分类的工具按评分降序排列
@@ -173,7 +179,14 @@ This category contains ${tools.length} tools.
         fc.asyncProperty(
           fc.array(
             fc.record({
-              category: fc.string({ minLength: 1, maxLength: 30 }).filter(s => s.trim().length > 0),
+              category: fc.string({ minLength: 1, maxLength: 30 })
+                .filter(s =>
+                  s.trim().length > 0 &&
+                  s.trim() === s &&
+                  !s.startsWith('.') &&
+                  !s.includes('/') &&
+                  !s.includes('\\')
+                ),
               tools: fc.array(
                 fc.record({
                   title: fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
@@ -196,6 +209,8 @@ This category contains ${tools.length} tools.
             return result;
           }),
           async (categories) => {
+            await fs.rm(testDir, { recursive: true, force: true });
+            await fs.mkdir(testDir, { recursive: true });
             // 创建测试分类文件
             for (const categoryData of categories) {
               const filePath = path.join(testDir, `${categoryData.category}.md`);
@@ -304,6 +319,7 @@ Tools in this category.
           ),
           fc.integer({ min: 1, max: 2 }), // 评分增量
           async (tools, ratingBoost) => {
+            hookManager.clearHooks();
             const category = 'TestCategory';
             const filePath = path.join(testDir, `${category}.md`);
             
@@ -315,7 +331,7 @@ Tools in this category.
             await createTestCategoryFile(filePath, category, toolsWithUrl);
 
             // 创建 customToolScore hook
-            const hookPath = path.join(testDir, 'tool-score-hook.js');
+            const hookPath = path.join(testDir, `tool-score-hook-${ratingBoost}-${tools.length}.js`);
             const hookContent = `
 module.exports = function(context) {
   return context.data.map(tool => ({

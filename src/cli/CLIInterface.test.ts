@@ -1,5 +1,14 @@
+import * as path from 'path';
 import { CLIInterface } from './CLIInterface';
 import { IContentGenerator, ITemplateRegistry, GenerateResult, TemplateInfo } from '../types/interfaces';
+
+const mockInteractiveStart = jest.fn().mockResolvedValue(undefined);
+
+jest.mock('./InteractiveCLI', () => ({
+  InteractiveCLI: jest.fn().mockImplementation(() => ({
+    start: mockInteractiveStart,
+  })),
+}));
 
 // Mock IContentGenerator
 class MockContentGenerator implements IContentGenerator {
@@ -101,14 +110,14 @@ describe('CLIInterface', () => {
 
   describe('create 命令', () => {
     it('应该成功创建内容', async () => {
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json'];
       
       await cli.parse(args);
 
       expect(mockGenerator.generateCalls).toHaveLength(1);
       expect(mockGenerator.generateCalls[0].templateType).toBe('weekly');
-      expect(consoleSpy).toHaveBeenCalledWith('开始生成 weekly 内容...');
-      expect(consoleSpy).toHaveBeenCalledWith('✅ 生成成功!');
+      expect(consoleSpy).toHaveBeenCalledWith('🚀 准备生成 weekly 内容...');
+      expect(consoleSpy).toHaveBeenCalledWith('\n✅ 生成成功!');
     });
 
     it('应该处理模板特定选项', async () => {
@@ -116,8 +125,9 @@ describe('CLIInterface', () => {
         'node',
         'cli.js',
         'create',
-        '--template',
         'weekly',
+        '--config',
+        'test.json',
         '--date',
         '2024-01-01',
         '--regenerate-summaries',
@@ -132,51 +142,51 @@ describe('CLIInterface', () => {
     it('应该在缺少模板类型时显示错误', async () => {
       const args = ['node', 'cli.js', 'create'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
-      
-      // 验证 generate 被调用时模板类型为 undefined
-      if (mockGenerator.generateCalls.length > 0) {
-        expect(mockGenerator.generateCalls[0].templateType).toBeUndefined();
-      }
+      mockInteractiveStart.mockClear();
+      await cli.parse(args);
+      expect(mockInteractiveStart).toHaveBeenCalled();
+      expect(mockGenerator.generateCalls).toHaveLength(0);
     });
 
     it('应该在模板不存在时显示错误', async () => {
-      const args = ['node', 'cli.js', 'create', '--template', 'nonexistent'];
+      const args = ['node', 'cli.js', 'create', 'nonexistent', '--config', 'test.json'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      await cli.parse(args);
       
       // 验证模板检查被调用
       expect(mockRegistry.hasTemplate('nonexistent')).toBe(false);
+      expect(processExitSpy).toHaveBeenCalledWith(1);
     });
 
     it('应该处理生成失败', async () => {
       mockGenerator.shouldSucceed = false;
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      await cli.parse(args);
       
       // 验证 generate 方法被调用
       expect(mockGenerator.generateCalls).toHaveLength(1);
+      expect(processExitSpy).toHaveBeenCalledWith(1);
     });
 
     it('应该支持预览模式', async () => {
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly', '--dry-run'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json', '--dry-run'];
       
       await cli.parse(args);
 
-      expect(consoleSpy).toHaveBeenCalledWith('预览模式 - 未创建文件');
-      expect(consoleSpy).toHaveBeenCalledWith('生成的内容:');
+      expect(consoleSpy).toHaveBeenCalledWith('👀 预览模式 - 不会创建实际文件');
+      expect(consoleSpy).toHaveBeenCalledWith('\n✅ 预览完成');
     });
 
     it('应该显示统计信息', async () => {
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json', '--verbose'];
       
       await cli.parse(args);
 
-      expect(consoleSpy).toHaveBeenCalledWith('📊 统计信息:');
-      expect(consoleSpy).toHaveBeenCalledWith('  articles: 5');
-      expect(consoleSpy).toHaveBeenCalledWith('  tools: 3');
-      expect(consoleSpy).toHaveBeenCalledWith('  notes: 2');
+      expect(consoleSpy).toHaveBeenCalledWith('\n📊 统计信息:');
+      expect(consoleSpy).toHaveBeenCalledWith('  • articles: 5');
+      expect(consoleSpy).toHaveBeenCalledWith('  • tools: 3');
+      expect(consoleSpy).toHaveBeenCalledWith('  • notes: 2');
     });
   });
 
@@ -186,9 +196,11 @@ describe('CLIInterface', () => {
       
       await cli.parse(args);
 
-      expect(consoleSpy).toHaveBeenCalledWith('可用的模板类型:');
-      expect(consoleSpy).toHaveBeenCalledWith('  weekly - weekly 模板');
-      expect(consoleSpy).toHaveBeenCalledWith('  monthly - monthly 模板');
+      expect(consoleSpy).toHaveBeenCalledWith('📋 可用的模板类型:\n');
+      expect(consoleSpy).toHaveBeenCalledWith('├─ weekly');
+      expect(consoleSpy).toHaveBeenCalledWith('   weekly 模板');
+      expect(consoleSpy).toHaveBeenCalledWith('└─ monthly');
+      expect(consoleSpy).toHaveBeenCalledWith('   monthly 模板');
     });
 
     it('应该处理空模板列表', async () => {
@@ -204,7 +216,8 @@ describe('CLIInterface', () => {
       const args = ['node', 'cli.js', 'list'];
       await emptyCli.parse(args);
 
-      expect(consoleSpy).toHaveBeenCalledWith('没有可用的模板类型');
+      expect(consoleSpy).toHaveBeenCalledWith('📋 没有可用的模板类型');
+      expect(consoleSpy).toHaveBeenCalledWith("💡 提示: 使用 'lyra init' 初始化配置");
     });
   });
 
@@ -214,7 +227,6 @@ describe('CLIInterface', () => {
         'node',
         'cli.js',
         'create',
-        '--template',
         'weekly',
         '--config',
         'custom.json',
@@ -223,7 +235,7 @@ describe('CLIInterface', () => {
       
       await cli.parse(args);
 
-      expect(mockGenerator.generateCalls[0].options.config).toBe('custom.json');
+      expect(mockGenerator.generateCalls[0].options.config).toBe(path.resolve('custom.json'));
       expect(mockGenerator.generateCalls[0].options.verbose).toBe(true);
     });
 
@@ -232,8 +244,9 @@ describe('CLIInterface', () => {
         'node',
         'cli.js',
         'create',
-        '--template',
         'weekly',
+        '--config',
+        'custom.json',
         '--no-aggregate',
       ];
       
@@ -248,30 +261,34 @@ describe('CLIInterface', () => {
       // Mock generator 抛出异常
       mockGenerator.generate = jest.fn().mockRejectedValue(new Error('测试异常'));
       
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      await cli.parse(args);
       
       // 验证 generate 方法被调用
       expect(mockGenerator.generate).toHaveBeenCalledWith('weekly', expect.any(Object));
+      expect(processExitSpy).toHaveBeenCalledWith(1);
     });
 
     it('应该处理无效的命令', async () => {
       const args = ['node', 'cli.js', 'invalid-command'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      await cli.parse(args);
+      expect(mockGenerator.generateCalls).toHaveLength(0);
     });
 
     it('应该处理缺少必需参数的情况', async () => {
       const args = ['node', 'cli.js', 'create', '--config', 'test.json'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      mockInteractiveStart.mockClear();
+      await cli.parse(args);
+      expect(mockInteractiveStart).toHaveBeenCalled();
     });
   });
 
   describe('帮助和版本信息', () => {
     it('应该显示帮助信息', async () => {
-      const args = ['node', 'cli.js', '--help'];
+      const args = ['node', 'cli.js', '-h'];
       
       // 帮助信息会导致程序正常退出，不抛出异常
       await cli.parse(args);
@@ -289,14 +306,14 @@ describe('CLIInterface', () => {
     });
 
     it('应该显示 create 命令的帮助', async () => {
-      const args = ['node', 'cli.js', 'create', '--help'];
+      const args = ['node', 'cli.js', 'create', '-h'];
       
       // 命令帮助会导致程序正常退出，不抛出异常
       await cli.parse(args);
     });
 
     it('应该显示 list 命令的帮助', async () => {
-      const args = ['node', 'cli.js', 'list', '--help'];
+      const args = ['node', 'cli.js', 'list', '-h'];
       
       // 命令帮助会导致程序正常退出，不抛出异常
       await cli.parse(args);
@@ -309,7 +326,6 @@ describe('CLIInterface', () => {
         'node',
         'cli.js',
         'create',
-        '--template',
         'weekly',
         '--config',
         'custom.json',
@@ -324,7 +340,7 @@ describe('CLIInterface', () => {
       await cli.parse(args);
 
       const options = mockGenerator.generateCalls[0].options;
-      expect(options.config).toBe('custom.json');
+      expect(options.config).toBe(path.resolve('custom.json'));
       expect(options.date).toBe('2024-01-01');
       expect(options.dryRun).toBe(true);
       expect(options.verbose).toBe(true);
@@ -337,7 +353,6 @@ describe('CLIInterface', () => {
         'node',
         'cli.js',
         'create',
-        '-t',
         'weekly',
         '-c',
         'custom.json',
@@ -347,12 +362,12 @@ describe('CLIInterface', () => {
       await cli.parse(args);
 
       const options = mockGenerator.generateCalls[0].options;
-      expect(options.config).toBe('custom.json');
+      expect(options.config).toBe(path.resolve('custom.json'));
       expect(options.verbose).toBe(true);
     });
 
     it('应该正确处理布尔选项的默认值', async () => {
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json'];
       
       await cli.parse(args);
 
@@ -367,22 +382,22 @@ describe('CLIInterface', () => {
 
   describe('输出格式', () => {
     it('应该在详细模式下显示更多信息', async () => {
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly', '--verbose'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json', '--verbose'];
       
       await cli.parse(args);
 
-      expect(consoleSpy).toHaveBeenCalledWith('开始生成 weekly 内容...');
-      expect(consoleSpy).toHaveBeenCalledWith('✅ 生成成功!');
-      expect(consoleSpy).toHaveBeenCalledWith('📄 文件路径: /output/weekly.md');
+      expect(consoleSpy).toHaveBeenCalledWith('🚀 准备生成 weekly 内容...');
+      expect(consoleSpy).toHaveBeenCalledWith('\n✅ 生成成功!');
+      expect(consoleSpy).toHaveBeenCalledWith('📄 文件已保存: /output/weekly.md');
     });
 
     it('应该在非详细模式下显示简洁信息', async () => {
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json'];
       
       await cli.parse(args);
 
-      expect(consoleSpy).toHaveBeenCalledWith('开始生成 weekly 内容...');
-      expect(consoleSpy).toHaveBeenCalledWith('✅ 生成成功!');
+      expect(consoleSpy).toHaveBeenCalledWith('🚀 准备生成 weekly 内容...');
+      expect(consoleSpy).toHaveBeenCalledWith('\n✅ 生成成功!');
     });
 
     it('应该正确格式化错误消息', async () => {
@@ -391,12 +406,12 @@ describe('CLIInterface', () => {
       // Mock console.error as well since error messages might go there
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       
-      const args = ['node', 'cli.js', 'create', '--template', 'weekly'];
+      const args = ['node', 'cli.js', 'create', 'weekly', '--config', 'test.json'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      await cli.parse(args);
       
       // 验证错误消息被显示 - 可能在 console.error 中
-      expect(consoleErrorSpy).toHaveBeenCalledWith('❌ 生成失败!');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('\n❌ 生成失败!');
       
       consoleErrorSpy.mockRestore();
     });
@@ -406,20 +421,24 @@ describe('CLIInterface', () => {
     it('应该处理空参数数组', async () => {
       const args: string[] = [];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      mockInteractiveStart.mockClear();
+      await cli.parse(args);
+      expect(mockInteractiveStart).toHaveBeenCalled();
     });
 
     it('应该处理只有程序名的参数', async () => {
       const args = ['node', 'cli.js'];
       
-      await expect(cli.parse(args)).rejects.toThrow('Process exited with code 1');
+      mockInteractiveStart.mockClear();
+      await cli.parse(args);
+      expect(mockInteractiveStart).toHaveBeenCalled();
     });
 
     it('应该处理特殊字符的模板名', async () => {
       // 添加特殊字符的模板
       mockRegistry.registerTemplate('test-template_123', {});
       
-      const args = ['node', 'cli.js', 'create', '--template', 'test-template_123'];
+      const args = ['node', 'cli.js', 'create', 'test-template_123', '--config', 'test.json'];
       
       await cli.parse(args);
 
@@ -432,7 +451,6 @@ describe('CLIInterface', () => {
         'node',
         'cli.js',
         'create',
-        '--template',
         'weekly',
         '--config',
         longPath,
@@ -440,7 +458,7 @@ describe('CLIInterface', () => {
       
       await cli.parse(args);
 
-      expect(mockGenerator.generateCalls[0].options.config).toBe(longPath);
+      expect(mockGenerator.generateCalls[0].options.config).toBe(path.resolve(longPath));
     });
 
     it('应该处理特殊日期格式', async () => {
@@ -457,8 +475,9 @@ describe('CLIInterface', () => {
           'node',
           'cli.js',
           'create',
-          '--template',
           'weekly',
+          '--config',
+          'test.json',
           '--date',
           date,
         ];

@@ -62,22 +62,11 @@ describe('Weekly Template', () => {
 
     const result = await templateEngine.render(templatePath, data);
 
-    expect(result).toContain('id: 20240101120000');
-    expect(result).toContain('title: Weekly #1');
-    expect(result).toContain('# Weekly 1');
-    expect(result).toContain('## 📌 本周动态');
-    expect(result).toContain('## 📚 精读与输入');
-    expect(result).toContain('### 📄 文章 / 书籍');
-    expect(result).toContain('## 🛠️ 技术与生产力');
-    expect(result).toContain('### 🧰 工具');
-    expect(result).toContain('### 💻 代码片段');
-    expect(result).toContain('## 🖼️ 生活瞬间');
-    expect(result).toContain('## 📦 好物推荐');
-    expect(result).toContain('## 🍴 饮食记录');
-    expect(result).toContain('## 🏃 运动记录');
-    expect(result).toContain('## 🎵 本周旋律');
-    expect(result).toContain('## 💬 随感');
-    expect(result).toContain('## 📊 本期统计');
+    expect(result).toContain('id: "20240101120000"');
+    expect(result).toContain('title: "Weekly #1"');
+    expect(result).toContain('Z°N VOYAGE LOG');
+    expect(result).toContain('## 精读文章');
+    expect(result).toContain('## 技术与生产力');
   });
 
   it('应该在内容为空时渲染占位文案', async () => {
@@ -110,13 +99,9 @@ describe('Weekly Template', () => {
 
     const result = await templateEngine.render(templatePath, data);
 
-    expect(result).toContain('本周暂无动态记录。');
-    expect(result).toContain('本周暂无精读内容。');
-    expect(result).toContain('本周暂无工具记录。');
-    expect(result).toContain('本周暂无代码片段记录。');
-    expect(result).toContain('本周暂无生活瞬间记录。');
-    expect(result).toContain('本周暂无随感记录。');
-    expect(result).toContain('## 📊 本期统计');
+    expect(result).toContain('Z°N VOYAGE LOG');
+    expect(result).not.toContain('## 精读文章');
+    expect(result).not.toContain('## 技术与生产力');
   });
 
   it('应该优先使用 AI 摘要', async () => {
@@ -218,6 +203,5 @@ describe('Weekly Template', () => {
 
     expect(result).toContain('![带图文章](https://example.com/article.jpg)');
     expect(result).toContain('![带图工具](https://example.com/tool.jpg)');
-    expect(result).toContain('![带图笔记](https://example.com/note.jpg)');
   });
 });

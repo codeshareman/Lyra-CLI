@@ -33,6 +33,9 @@ import { EnhancedContentFilter } from '../filters/EnhancedContentFilter';
 import { DataSourceManager } from '../core/DataSourceManager';
 import { DataCollectionError, ErrorCode } from '../types/errors';
 import { LocalModelProvider } from '../ai/providers/LocalModelProvider';
+import { OpenAIProvider } from '../ai/providers/OpenAIProvider';
+import { AnthropicProvider } from '../ai/providers/AnthropicProvider';
+import { GeminiProvider } from '../ai/providers/GeminiProvider';
 import type {
   IAIProvider as RuntimeAIProvider,
   AIProviderConfig,
@@ -2218,24 +2221,40 @@ export class WeeklyDataProvider implements IDataProvider {
       return null;
     }
 
-    const provider = String(aiConfig.provider).toLowerCase();
-
-    if (provider !== 'local') {
-      console.warn(`[weekly] 当前仅支持 local (Ollama) provider，已忽略: ${provider}`);
+    const providerRaw = String(aiConfig.provider).toLowerCase();
+    const provider = providerRaw === 'google' ? 'gemini' : providerRaw;
+    const supported = ['local', 'openai', 'anthropic', 'gemini'];
+    if (!supported.includes(provider)) {
+      console.warn(`[weekly] 当前不支持 provider=${providerRaw}，已忽略。支持: ${supported.join(', ')}`);
       return null;
     }
 
+    const apiKey = this.resolveAIKey(
+      provider,
+      typeof aiConfig.apiKey === 'string' ? aiConfig.apiKey : undefined
+    );
+
     const providerConfig: AIProviderConfig = {
-      provider: 'local',
+      provider: provider as AIProviderConfig['provider'],
       model: typeof aiConfig.model === 'string' ? aiConfig.model : undefined,
       baseUrl: typeof aiConfig.baseUrl === 'string' ? aiConfig.baseUrl : undefined,
+      apiKey,
       timeout: typeof aiConfig.timeout === 'number' ? aiConfig.timeout : undefined,
       maxRetries:
         typeof aiConfig.maxRetries === 'number' ? aiConfig.maxRetries : undefined,
     };
 
     try {
-      return new LocalModelProvider(providerConfig);
+      if (provider === 'local') {
+        return new LocalModelProvider(providerConfig);
+      }
+      if (provider === 'openai') {
+        return new OpenAIProvider(providerConfig);
+      }
+      if (provider === 'anthropic') {
+        return new AnthropicProvider(providerConfig);
+      }
+      return new GeminiProvider(providerConfig);
     } catch (error) {
       console.warn(
         `[weekly] 初始化 AI provider 失败，回退规则金句: ${
@@ -2316,6 +2335,39 @@ export class WeeklyDataProvider implements IDataProvider {
     }
 
     return sliced.trim();
+  }
+
+  private resolveAIKey(provider: string, apiKey?: string): string | undefined {
+    const resolved = this.resolveEnvValue(apiKey);
+    if (resolved) {
+      return resolved;
+    }
+
+    if (provider === 'openai') {
+      return process.env.OPENAI_API_KEY;
+    }
+    if (provider === 'anthropic') {
+      return process.env.ANTHROPIC_API_KEY;
+    }
+    if (provider === 'gemini') {
+      return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    }
+
+    return undefined;
+  }
+
+  private resolveEnvValue(value?: string): string | undefined {
+    const input = String(value || '').trim();
+    if (!input) {
+      return undefined;
+    }
+
+    const match = input.match(/^\$\{([A-Z0-9_]+)\}$/);
+    if (!match) {
+      return input;
+    }
+
+    return process.env[match[1]] || '';
   }
 
   private async syncRecommendationFlagsFromHistory(

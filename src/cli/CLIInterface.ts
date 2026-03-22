@@ -105,7 +105,7 @@ interface PromptModuleConfig {
 
 interface ArticleAIConfig {
   enabled: boolean;
-  provider?: 'openai' | 'anthropic' | 'local';
+  provider?: 'openai' | 'anthropic' | 'local' | 'gemini' | 'google';
   model?: string;
   apiKey?: string;
   baseUrl?: string;
@@ -367,7 +367,7 @@ export class CLIInterface {
       .option('--ai-tags', '基于内容用 AI 生成/补全 tags')
       .option('--max-tags <number>', '每篇最多 tags 数量（默认: 8）', '8')
       .option('--min-tags <number>', '每篇最少 tags 数量（默认: 1）', '1')
-      .option('--provider <name>', 'AI provider: openai|anthropic|local')
+      .option('--provider <name>', 'AI provider: openai|anthropic|gemini|local')
       .option('--model <name>', 'AI 模型名称')
       .option('--api-key <key>', 'AI API Key（可用环境变量）')
       .option('--base-url <url>', 'AI Base URL')
@@ -2441,26 +2441,30 @@ export class CLIInterface {
     const providerRaw = String(options.provider || process.env.LYRA_TAG_AI_PROVIDER || 'local')
       .trim()
       .toLowerCase();
-    const provider = (providerRaw === 'openai' || providerRaw === 'anthropic' || providerRaw === 'local')
-      ? providerRaw
+    const provider = (providerRaw === 'openai' || providerRaw === 'anthropic' || providerRaw === 'gemini' || providerRaw === 'google' || providerRaw === 'local')
+      ? (providerRaw === 'google' ? 'gemini' : providerRaw)
       : 'local';
 
     const defaultModel = provider === 'openai'
       ? 'gpt-4o-mini'
       : provider === 'anthropic'
         ? 'claude-3-5-sonnet-latest'
-        : 'llama3.1';
+        : provider === 'gemini'
+          ? 'gemini-1.5-flash'
+          : 'llama3.1';
 
     const envApiKey = provider === 'openai'
       ? process.env.OPENAI_API_KEY
       : provider === 'anthropic'
         ? process.env.ANTHROPIC_API_KEY
-        : process.env.LOCAL_MODEL_API_KEY;
+        : provider === 'gemini'
+          ? (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY)
+          : process.env.LOCAL_MODEL_API_KEY;
 
     const apiKeyRaw = String(options.apiKey || envApiKey || '').trim();
     const apiKey = apiKeyRaw ? this.resolveEnvValue(apiKeyRaw) : '';
 
-    if ((provider === 'openai' || provider === 'anthropic') && !apiKey) {
+    if ((provider === 'openai' || provider === 'anthropic' || provider === 'gemini') && !apiKey) {
       throw new Error(provider + ' provider 缺少 apiKey（可通过 --api-key 或环境变量提供）');
     }
 
@@ -3657,8 +3661,8 @@ export class CLIInterface {
     const providerRaw = String(
       promptingAI.provider || ai.provider || 'local'
     ).trim().toLowerCase();
-    const provider = (providerRaw === 'openai' || providerRaw === 'anthropic' || providerRaw === 'local')
-      ? providerRaw
+    const provider = (providerRaw === 'openai' || providerRaw === 'anthropic' || providerRaw === 'gemini' || providerRaw === 'google' || providerRaw === 'local')
+      ? (providerRaw === 'google' ? 'gemini' : providerRaw)
       : 'local';
 
     const apiKey = this.resolveEnvValue(
@@ -5200,6 +5204,9 @@ export class CLIInterface {
         if (provider === 'anthropic') {
           return await this.requestAnthropicCompletion(prompt, ai);
         }
+        if (provider === 'gemini') {
+          return await this.requestGeminiCompletion(prompt, ai);
+        }
         return await this.requestLocalCompletion(prompt, ai);
       } catch (error) {
         lastError = error;
@@ -5233,6 +5240,9 @@ export class CLIInterface {
     }
     if (provider === 'anthropic') {
       return 'claude-3-5-sonnet-latest';
+    }
+    if (provider === 'gemini') {
+      return 'gemini-1.5-flash';
     }
     return 'llama3.1';
   }
@@ -5314,6 +5324,50 @@ export class CLIInterface {
       throw new Error('Anthropic 返回内容为空');
     }
     return content.trim();
+  }
+
+  private async requestGeminiCompletion(prompt: string, ai: ArticleAIConfig): Promise<string> {
+    if (!ai.apiKey) {
+      throw new Error('Gemini provider 缺少 apiKey');
+    }
+    const baseUrl = ai.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
+    const model = ai.model || 'gemini-1.5-flash';
+    const endpoint = `${baseUrl.replace(/\/$/, '')}/models/${model}:generateContent?key=${encodeURIComponent(ai.apiKey)}`;
+    const data = await this.fetchJsonWithTimeout(
+      endpoint,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: ai.temperature ?? 0.7,
+            maxOutputTokens: ai.maxTokens ?? 2000,
+          },
+        }),
+      },
+      ai.timeout || 60000
+    ) as any;
+
+    if (data?.promptFeedback?.blockReason) {
+      throw new Error(`Gemini prompt blocked: ${data.promptFeedback.blockReason}`);
+    }
+
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const content = parts.map((part: any) => part?.text || '').join('').trim();
+    if (!content) {
+      throw new Error('Gemini 返回内容为空');
+    }
+    return content;
   }
 
   private async requestLocalCompletion(prompt: string, ai: ArticleAIConfig): Promise<string> {

@@ -29,6 +29,10 @@ export class HookManager implements IHookManager {
       const absolutePath = path.resolve(hookPath);
 
       // 动态加载钩子模块
+      // 确保热更新时重新加载模块
+      if (require.cache[absolutePath]) {
+        delete require.cache[absolutePath];
+      }
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const hookModule = require(absolutePath);
 
