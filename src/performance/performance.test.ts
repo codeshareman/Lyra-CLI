@@ -112,7 +112,7 @@ describe('性能测试', () => {
    */
   async function createTestFiles(count: number): Promise<string[]> {
     const files: string[] = [];
-    
+
     // 创建文章目录
     const articlesDir = path.join(tempDir, 'articles');
     await fs.mkdir(articlesDir, { recursive: true });
@@ -246,7 +246,7 @@ category: 学习笔记
    * 创建测试配置
    */
   async function createTestConfig(): Promise<string> {
-    const configPath = path.join(tempDir, '.content-generator.json');
+    const configPath = path.join(tempDir, '.lyra.json');
     const config = createWeeklyConfig(
       {
         articles: {
@@ -308,11 +308,11 @@ category: 学习笔记
 
     // 验证处理了预期数量的文件
     if (result.statistics) {
-      const totalProcessed = 
-        (result.statistics.articles || 0) + 
-        (result.statistics.tools || 0) + 
+      const totalProcessed =
+        (result.statistics.articles || 0) +
+        (result.statistics.tools || 0) +
         (result.statistics.notes || 0);
-      
+
       expect(totalProcessed).toBeGreaterThan(0);
       console.log(`处理的文件数量: ${totalProcessed}`);
     }

@@ -173,6 +173,63 @@ category: 音乐
     expect(data.content.music?.some((item) => item.title === 'Song A')).toBe(true);
   });
 
+  it('should not classify MacBook-style titles as books', async () => {
+    await fs.writeFile(
+      path.join(tempDir, 'articles', 'macbook.md'),
+      `---
+title: MacBook Neo may be one of Apple's most inspiring products in quite some time
+url: https://example.com/macbook
+rating: 4
+tags:
+  - MacBook Neo
+date: 2024-01-03
+---
+content
+`,
+      'utf-8'
+    );
+
+    const config: EnhancedTemplateConfig = {
+      enabled: true,
+      template: { path: './templates/weekly.hbs' },
+      sources: {
+        articles: path.join(tempDir, 'articles'),
+        tools: path.join(tempDir, 'tools'),
+        notes: path.join(tempDir, 'notes'),
+        life: path.join(tempDir, 'life'),
+        food: path.join(tempDir, 'food'),
+        exercise: path.join(tempDir, 'exercise'),
+        music: path.join(tempDir, 'music'),
+      },
+      output: {
+        path: tempDir,
+        filename: 'weekly-{{issueNumber}}.md',
+      },
+      content: {
+        articles: { topN: 10, minRating: 0 },
+        tools: { perCategory: 5 },
+        notes: { groupBy: 'none' },
+      },
+      modules: {
+        weeklyUpdates: { enabled: true },
+        reading: { enabled: true },
+        tech: { enabled: true },
+        life: { enabled: true },
+        products: { enabled: true },
+        food: { enabled: true },
+        exercise: { enabled: true },
+        music: { enabled: true },
+        thoughts: { enabled: true },
+      },
+    };
+
+    const provider = new WeeklyDataProvider(config, new HookManager(), tempDir);
+    const data = (await provider.collectData({ date: new Date('2024-01-04'), config })) as EnhancedTemplateData;
+
+    expect(data.content.readingArticles?.some((item) => item.title.startsWith('MacBook Neo'))).toBe(true);
+    expect(data.content.readingBooks?.some((item) => item.title.startsWith('MacBook Neo'))).toBe(false);
+  });
+
   it('should apply independent module filters and generate module statistics', async () => {
     await fs.writeFile(
       path.join(tempDir, 'articles', 'a1.md'),

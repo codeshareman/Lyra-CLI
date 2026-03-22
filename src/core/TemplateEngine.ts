@@ -190,12 +190,21 @@ export class TemplateEngine implements ITemplateEngine {
 
       if (links.length === 0) return '';
 
-      const lines = ['## 引用链接', ''];
-      links.forEach((link, index) => {
-        lines.push(`[${index + 1}] ${link}`);
-      });
+      const sanitize = (value: string) => value.replace(/[\r\n]+/g, '').trim();
 
-      return new this.handlebars.SafeString(lines.join('\n'));
+      const escapeHtml = (value: string) =>
+        value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+
+      const lines = links.map((link, index) => `[${index + 1}] ${sanitize(link)}`);
+      // Blank lines create separate paragraphs; no HTML tags will show as text.
+      const body = lines.join('\n\n');
+
+      return new this.handlebars.SafeString(`## 引用链接\n\n${body}`);
     });
 
     // renderCode: 渲染代码块

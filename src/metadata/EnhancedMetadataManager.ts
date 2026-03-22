@@ -153,6 +153,9 @@ export class EnhancedMetadataManager extends MetadataManager {
         images,
         date,
         rating: this.parseOptionalNumber(frontmatter.rating),
+        location: this.parseOptionalString(frontmatter.location),
+        channel: this.parseOptionalString(frontmatter.channel),
+        place: this.parseOptionalString(frontmatter.place),
         category: this.parseOptionalString(frontmatter.category),
         path: filePath,
       };

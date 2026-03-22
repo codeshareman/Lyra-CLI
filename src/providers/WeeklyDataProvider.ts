@@ -1298,6 +1298,7 @@ export class WeeklyDataProvider implements IDataProvider {
       return;
     }
 
+    const forceAI = aiConfig?.summaries?.forceAI ?? false;
     const configuredMax = Number(aiConfig?.summaries?.maxLength || aiConfig?.maxLength || 180);
     const configuredMin = Number(aiConfig?.summaries?.minLength || 20);
     const maxLength = this.clampNumber(configuredMax, 20, 280, 180);
@@ -1306,63 +1307,93 @@ export class WeeklyDataProvider implements IDataProvider {
     const readingItems = modules.reading || [];
 
     for (const article of readingItems) {
-      if (article.aiSummary && article.aiSummary.trim()) {
-        article.aiSummary = this.normalizeSummaryLength(
+      if (!forceAI && article.aiSummary && article.aiSummary.trim()) {
+        const normalized = this.normalizeSummaryLength(
           article.aiSummary,
           minLength,
           maxLength,
           article.title
         );
+        if (!this.isLikelyEnglish(normalized)) {
+          article.aiSummary = normalized;
+          continue;
+        }
+
+        try {
+          const sourceContent = await this.getSummarySource(article);
+          if (sourceContent && aiProvider) {
+            try {
+              const aiPrompt = this.buildAISummaryPrompt(article, sourceContent, minLength, maxLength);
+              const generated = await aiProvider.generateSummary(aiPrompt, {
+                maxLength,
+                language: 'zh-CN',
+                style: 'detailed',
+                temperature: 0.35,
+              });
+              const regenerated = this.normalizeSummaryLength(
+                generated,
+                minLength,
+                maxLength,
+                article.title
+              );
+              if (regenerated && !this.isLikelyEnglish(regenerated)) {
+                article.aiSummary = regenerated;
+                continue;
+              }
+            } catch (error) {
+              console.warn(
+                `[weekly] 摘要重生成失败，回退个人总结: ${
+                  error instanceof Error ? error.message : String(error)
+                }`
+              );
+            }
+          }
+          article.aiSummary = this.buildPersonalReflectionFallback(article, minLength, maxLength);
+        } catch {
+          article.aiSummary = this.buildPersonalReflectionFallback(article, minLength, maxLength);
+        }
         continue;
       }
 
       try {
         const sourceContent = await this.getSummarySource(article);
         if (sourceContent && aiProvider) {
-          try {
-            const aiPrompt = this.buildAISummaryPrompt(article, sourceContent, minLength, maxLength);
-            const generated = await aiProvider.generateSummary(aiPrompt, {
-              maxLength,
-              language: 'zh-CN',
-              style: 'detailed',
-              temperature: 0.35,
-            });
-            const normalized = this.normalizeSummaryLength(
-              generated,
-              minLength,
-              maxLength,
-              article.title
-            );
-            if (normalized) {
-              article.aiSummary = normalized;
-              continue;
-            }
-          } catch (error) {
-            console.warn(
-              `[weekly] 本地模型摘要失败，回退规则摘要: ${
-                error instanceof Error ? error.message : String(error)
-              }`
-            );
+          const generated = await this.generateAIReflectionSummary(
+            article,
+            sourceContent,
+            minLength,
+            maxLength,
+            aiProvider
+          );
+          if (generated) {
+            article.aiSummary = generated;
+            continue;
           }
         }
 
+        if (forceAI) {
+          article.aiSummary = '';
+          continue;
+        }
+
         if (sourceContent) {
-          article.aiSummary = this.createSummaryFallback(sourceContent, minLength, maxLength, article.title);
+          article.aiSummary = this.createSummaryFallback(
+            sourceContent,
+            minLength,
+            maxLength,
+            article.title,
+            article
+          );
         } else {
-          const titleFallback = (article.title || '').replace(/\s+/g, ' ').trim();
-          article.aiSummary = titleFallback || this.buildLinkAwareSummary(article, minLength, maxLength);
+          article.aiSummary = this.buildPersonalReflectionFallback(article, minLength, maxLength);
         }
       } catch {
-        article.aiSummary = this.buildLinkAwareSummary(article, minLength, maxLength);
+        article.aiSummary = forceAI ? '' : this.buildPersonalReflectionFallback(article, minLength, maxLength);
       }
     }
   }
 
   private async getSummarySource(article: EnhancedArticle): Promise<string> {
-    if (article.description && article.description.trim()) {
-      return article.description;
-    }
-
     if (!article.path) {
       return '';
     }
@@ -1378,6 +1409,10 @@ export class WeeklyDataProvider implements IDataProvider {
       // ignore and fallback
     }
 
+    if (article.description && article.description.trim()) {
+      return article.description;
+    }
+
     return '';
   }
 
@@ -1385,15 +1420,26 @@ export class WeeklyDataProvider implements IDataProvider {
     content: string,
     minLength: number,
     maxLength: number,
-    seedText?: string
+    seedText?: string,
+    article?: EnhancedArticle
   ): string {
     const compact = this.stripMarkdownForSummary(content);
     if (!compact) {
-      return this.normalizeSummaryLength('暂无可提取正文，建议打开原文快速浏览核心观点。', minLength, maxLength, seedText);
+      const fallback = article
+        ? this.buildPersonalReflectionFallback(article, minLength, maxLength)
+        : '暂无可提取正文，建议打开原文快速浏览核心观点。';
+      return this.normalizeSummaryLength(fallback, minLength, maxLength, seedText);
     }
 
     const deepSummary = this.composeDeepSummary(compact);
-    return this.normalizeSummaryLength(deepSummary || compact, minLength, maxLength, seedText);
+    const normalized = this.normalizeSummaryLength(deepSummary || compact, minLength, maxLength, seedText);
+    if (this.isLikelyEnglish(normalized) && article) {
+      return this.buildPersonalReflectionFallback(article, minLength, maxLength, compact);
+    }
+    if (article) {
+      return this.buildPersonalReflectionFallback(article, minLength, maxLength, normalized);
+    }
+    return normalized;
   }
 
   private normalizeSummaryLength(
@@ -1403,27 +1449,15 @@ export class WeeklyDataProvider implements IDataProvider {
     seedText?: string
   ): string {
     let compact = summary.replace(/\s+/g, ' ').trim();
+    compact = compact.replace(/^(摘要|总结|Summary|TL;DR)[:：\-\s]+/i, '').trim();
     if (!compact) {
       compact = '暂无可提取摘要。';
     }
 
     compact = this.truncateSummaryAtBoundary(compact, maxLength);
 
-    if (compact.length < minLength) {
-      const seed = (seedText || '').replace(/\s+/g, ' ').trim();
-      const extension = seed
-        ? ` 建议围绕「${seed.slice(0, 18)}」继续提炼关键观点。`
-        : ' 建议补充原文背景与关键结论。';
-      compact = this.truncateSummaryAtBoundary(`${compact}${extension}`.trim(), maxLength);
-    }
-
     if (!/[。！？.!?]$/.test(compact)) {
       compact = this.truncateSummaryAtBoundary(`${compact}。`, maxLength);
-    }
-
-    if (compact.length < minLength) {
-      const fallback = '值得继续跟进并沉淀为可执行要点。';
-      compact = this.truncateSummaryAtBoundary(`${compact}${fallback}`, maxLength);
     }
 
     return compact;
@@ -1559,12 +1593,142 @@ export class WeeklyDataProvider implements IDataProvider {
     const clipped = compact.length > 3200 ? compact.slice(0, 3200) : compact;
 
     return [
-      `请生成一段 ${minLength}-${maxLength} 字的中文深度摘要。`,
-      '要求：提炼问题背景、核心观点、关键方法、可执行启发与结论；语义完整，逻辑清楚。',
-      '限制：不要分点，不要空话，不要使用“本文介绍了/作者认为”等模板句。',
+      `请生成一段 ${minLength}-${maxLength} 字的中文摘要。`,
+      '要求：概括问题背景、核心观点、关键方法和结论，信息密度高、语义完整，客观表述，不使用第一人称。',
+      '限制：不要分点，不要空话，不要出现文章标题或“本文/作者”等模板句；必须是中文，不要夹杂英文原句。',
       `标题：${title}`,
       `正文：${clipped}`,
     ].join('\n');
+  }
+
+  private async generateAIReflectionSummary(
+    article: EnhancedArticle,
+    sourceContent: string,
+    minLength: number,
+    maxLength: number,
+    aiProvider: RuntimeAIProvider
+  ): Promise<string> {
+    const tryGenerate = async (prompt: string): Promise<string> => {
+      const generated = await aiProvider.generateSummary(prompt, {
+        maxLength,
+        language: 'zh-CN',
+        style: 'detailed',
+        temperature: 0.35,
+      });
+      return this.normalizeSummaryLength(generated, minLength, maxLength, article.title);
+    };
+
+    try {
+      const basePrompt = this.buildAISummaryPrompt(article, sourceContent, minLength, maxLength);
+      let summary = await tryGenerate(basePrompt);
+      if (summary && !this.isLikelyEnglish(summary) && summary.length >= minLength) {
+        return summary;
+      }
+
+      const expandPrompt = [
+        `请把以下内容扩写成 ${minLength}-${maxLength} 字的中文摘要。`,
+        '要求：信息密度高，客观表述，不使用第一人称。',
+        `原内容：${summary || ''}`,
+        `原文：${sourceContent.slice(0, 2400)}`,
+      ].join('\n');
+      summary = await tryGenerate(expandPrompt);
+      if (summary && !this.isLikelyEnglish(summary) && summary.length >= minLength) {
+        return summary;
+      }
+
+      const rewritePrompt = [
+        `请将以下英文内容改写为 ${minLength}-${maxLength} 字的中文摘要。`,
+        '要求：客观表述，不使用第一人称，不要出现标题或“本文/作者”，不要夹杂英文。',
+        `英文内容：${sourceContent.slice(0, 2400)}`,
+      ].join('\n');
+      summary = await tryGenerate(rewritePrompt);
+      if (summary && !this.isLikelyEnglish(summary) && summary.length >= minLength) {
+        return summary;
+      }
+    } catch (error) {
+      console.warn(
+        `[weekly] AI 摘要生成失败: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    return '';
+  }
+
+  private buildPersonalReflectionFallback(
+    article: EnhancedArticle,
+    minLength: number,
+    maxLength: number,
+    sourceContent?: string
+  ): string {
+    const compact = sourceContent ? this.stripMarkdownForSummary(sourceContent) : '';
+    const keyPoints = compact ? this.pickKeyPhrases(compact, 3) : [];
+    const seed = this.hashTextToInt(`${article.title || ''}|${article.url || ''}`);
+    const introPool = [
+      '这次我更在意的是',
+      '这篇最戳我的是',
+      '这次读下来，我更关注的是',
+      '真正让我停下来想一想的是',
+      '我最想带走的是',
+    ];
+    const actionPool = [
+      '我会把关键点拆成 2-3 个动作，先在手头项目里小范围试一轮，再根据反馈调节奏和方法。',
+      '接下来我会先做一个小实验，把观点落地，再看效果决定要不要放大。',
+      '我打算先选一个最能落地的点试一周，验证后再补足细节。',
+      '我会先把它转成可执行清单，做完一轮再回头修正。',
+      '下一步就是先做小步验证，别急着下结论。',
+    ];
+    const genericInsights = [
+      '它提醒我把判断拆小、把行动落地。',
+      '它让我意识到方法比结论更重要。',
+      '它让我重新审视优先级和取舍。',
+      '它提醒我别急着求快，而是先把基础打稳。',
+      '它让我看到一些被我忽略的隐性成本。',
+    ];
+    const intro = introPool[seed % introPool.length];
+    const action = actionPool[seed % actionPool.length];
+    const insightBody = keyPoints.length > 0 ? keyPoints.join('，') : genericInsights[seed % genericInsights.length];
+    const base = `${intro}${insightBody}。${action}`;
+    return this.normalizeSummaryLength(base, minLength, maxLength, article.title);
+  }
+
+  private pickKeyPhrases(content: string, limit: number): string[] {
+    const sentences = content
+      .split(/(?<=[。！？!?；;])\s+/)
+      .map((sentence) => sentence.trim())
+      .filter((sentence) => sentence.length >= 8)
+      .slice(0, 10);
+
+    if (sentences.length === 0) {
+      return [];
+    }
+
+    const scored = sentences.map((sentence) => ({
+      sentence,
+      score: this.scoreSummarySentence(sentence, 0, sentences.length),
+    }));
+
+    const picked = scored
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((item) => item.sentence.replace(/[。！？!?；;]+$/g, ''))
+      .map((item) => item.length > 30 ? `${item.slice(0, 28)}…` : item);
+
+    const chineseOnly = picked.filter((item) => /[\u4e00-\u9fff]/.test(item));
+    return chineseOnly.length > 0 ? chineseOnly : [];
+  }
+
+  private isLikelyEnglish(text: string): boolean {
+    const compact = text.replace(/\s+/g, '');
+    if (!compact) {
+      return false;
+    }
+    const cjkCount = (compact.match(/[\u4e00-\u9fff]/g) || []).length;
+    const latinCount = (compact.match(/[A-Za-z]/g) || []).length;
+    if (cjkCount >= 6) {
+      return false;
+    }
+    const ratio = latinCount / Math.max(compact.length, 1);
+    return ratio >= 0.55;
   }
 
   private scoreSummarySentence(sentence: string, index: number, total: number): number {
@@ -1610,25 +1774,55 @@ export class WeeklyDataProvider implements IDataProvider {
       ? item.tags.map((tag) => String(tag).toLowerCase())
       : [];
 
-    const bookKeywords = ['书', '书籍', '读书', 'book', 'ebook', 'kindle', 'isbn'];
-    const articleKeywords = ['文章', 'article', 'clipping', '博客', 'blog', 'paper', '论文'];
+    const bookKeywords = ['书', '书籍', '读书'];
+    const articleKeywords = ['文章', 'clipping', '博客', 'blog', 'paper', '论文'];
+    const bookPattern = /\b(book|books|ebook|e-book|kindle|isbn)\b/i;
+    const articlePattern = /\b(article|articles|clipping|blog|paper|papers)\b/i;
 
-    const inCategory = bookKeywords.some((keyword) => category.includes(keyword));
-    if (inCategory) {
+    const hasBookKeyword = (text: string): boolean => {
+      if (!text) {
+        return false;
+      }
+      if (bookKeywords.some((keyword) => text.includes(keyword))) {
+        return true;
+      }
+      return bookPattern.test(text);
+    };
+
+    const hasArticleKeyword = (text: string): boolean => {
+      if (!text) {
+        return false;
+      }
+      if (articleKeywords.some((keyword) => text.includes(keyword))) {
+        return true;
+      }
+      return articlePattern.test(text);
+    };
+
+    if (hasBookKeyword(category)) {
       return true;
     }
-
-    const inTags = tags.some((tag) => bookKeywords.some((keyword) => tag.includes(keyword)));
-    if (inTags) {
-      return true;
-    }
-
-    const categoryIsArticle = articleKeywords.some((keyword) => category.includes(keyword));
-    if (categoryIsArticle) {
+    if (hasArticleKeyword(category)) {
       return false;
     }
 
-    return bookKeywords.some((keyword) => title.includes(keyword));
+    const tagHasBook = tags.some((tag) => hasBookKeyword(tag));
+    if (tagHasBook) {
+      return true;
+    }
+    const tagHasArticle = tags.some((tag) => hasArticleKeyword(tag));
+    if (tagHasArticle) {
+      return false;
+    }
+
+    if (hasBookKeyword(title)) {
+      return true;
+    }
+    if (hasArticleKeyword(title)) {
+      return false;
+    }
+
+    return false;
   }
 
   private async resolveVisualConfig(
@@ -2233,10 +2427,13 @@ export class WeeklyDataProvider implements IDataProvider {
     purpose: 'goldenQuote' | 'summaries'
   ): RuntimeAIProvider | null {
     const aiConfig = this.config.ai as any;
-    const aiEnabled = Boolean(aiConfig?.enabled);
+    const aiEnabled = Boolean(aiConfig?.enabled ?? aiConfig?.summaries?.enabled ?? aiConfig?.goldenQuote?.enabled);
     const quoteEnabled = Boolean(aiConfig?.goldenQuote?.enabled);
     const shouldEnableForPurpose = purpose === 'summaries' ? aiEnabled : (aiEnabled || quoteEnabled);
     if (!shouldEnableForPurpose || !aiConfig?.provider) {
+      if (purpose === 'summaries' && aiConfig?.summaries?.enabled) {
+        console.warn('[weekly] summaries 已启用，但未开启 ai.enabled 或 provider，已跳过 AI 摘要生成。');
+      }
       return null;
     }
 
@@ -2372,7 +2569,17 @@ export class WeeklyDataProvider implements IDataProvider {
 
     const syncArticles = Boolean(articleConfig.syncRecommendedFromHistory);
     const syncTools = Boolean(toolConfig.syncRecommendedFromHistory);
-    if (!syncArticles && !syncTools) {
+    const contentConfig = (this.config.content || {}) as Record<string, any>;
+    const lifeConfig = (contentConfig.life || {}) as Record<string, any>;
+    const foodConfig = (contentConfig.food || {}) as Record<string, any>;
+    const exerciseConfig = (contentConfig.exercise || {}) as Record<string, any>;
+    const musicConfig = (contentConfig.music || {}) as Record<string, any>;
+    const isEnhanced = this.isEnhancedConfig(this.config);
+    const syncLife = isEnhanced && Boolean(lifeConfig.syncRecommendedFromHistory);
+    const syncFood = isEnhanced && Boolean(foodConfig.syncRecommendedFromHistory);
+    const syncExercise = isEnhanced && Boolean(exerciseConfig.syncRecommendedFromHistory);
+    const syncMusic = isEnhanced && Boolean(musicConfig.syncRecommendedFromHistory);
+    if (!syncArticles && !syncTools && !syncLife && !syncFood && !syncExercise && !syncMusic) {
       return;
     }
 
@@ -2384,7 +2591,26 @@ export class WeeklyDataProvider implements IDataProvider {
     const toolHistoryDays = syncTools
       ? this.toNonNegativeInt(toolConfig.historyDays, 0)
       : 0;
-    const historyDays = Math.max(articleHistoryDays, toolHistoryDays);
+    const lifeHistoryDays = syncLife
+      ? this.toNonNegativeInt(lifeConfig.historyDays, 0)
+      : 0;
+    const foodHistoryDays = syncFood
+      ? this.toNonNegativeInt(foodConfig.historyDays, 0)
+      : 0;
+    const exerciseHistoryDays = syncExercise
+      ? this.toNonNegativeInt(exerciseConfig.historyDays, 0)
+      : 0;
+    const musicHistoryDays = syncMusic
+      ? this.toNonNegativeInt(musicConfig.historyDays, 0)
+      : 0;
+    const historyDays = Math.max(
+      articleHistoryDays,
+      toolHistoryDays,
+      lifeHistoryDays,
+      foodHistoryDays,
+      exerciseHistoryDays,
+      musicHistoryDays
+    );
     const historyUrls = await this.collectWeeklyHistoryUrls(weekStart, historyDays);
     if (historyUrls.size === 0) {
       console.log('[weekly] 未检测到上一周推荐记录，跳过标记同步，直接生成本周 weekly 内容...');
@@ -2393,20 +2619,73 @@ export class WeeklyDataProvider implements IDataProvider {
 
     let articleStats = { updatedFiles: 0, updatedEntries: 0 };
     let toolStats = { updatedFiles: 0, updatedEntries: 0 };
+    let lifeStats = { updatedFiles: 0, updatedEntries: 0 };
+    let foodStats = { updatedFiles: 0, updatedEntries: 0 };
+    let exerciseStats = { updatedFiles: 0, updatedEntries: 0 };
+    let musicStats = { updatedFiles: 0, updatedEntries: 0 };
     if (syncArticles) {
       articleStats = await this.syncArticleRecommendedFlags(historyUrls);
     }
     if (syncTools) {
       toolStats = await this.syncToolRecommendedFlags(historyUrls);
     }
+    const enhancedConfig = this.config as EnhancedTemplateConfig;
+    if (syncLife) {
+      lifeStats = await this.syncLogRecommendedFlags(
+        historyUrls,
+        enhancedConfig.sources?.life,
+        'life'
+      );
+    }
+    if (syncFood) {
+      foodStats = await this.syncLogRecommendedFlags(
+        historyUrls,
+        enhancedConfig.sources?.food,
+        'food'
+      );
+    }
+    if (syncExercise) {
+      exerciseStats = await this.syncLogRecommendedFlags(
+        historyUrls,
+        enhancedConfig.sources?.exercise,
+        'exercise'
+      );
+    }
+    if (syncMusic) {
+      musicStats = await this.syncLogRecommendedFlags(
+        historyUrls,
+        enhancedConfig.sources?.music,
+        'music'
+      );
+    }
 
     if (
       articleStats.updatedEntries > 0 ||
-      toolStats.updatedEntries > 0
+      toolStats.updatedEntries > 0 ||
+      lifeStats.updatedEntries > 0 ||
+      foodStats.updatedEntries > 0 ||
+      exerciseStats.updatedEntries > 0 ||
+      musicStats.updatedEntries > 0
     ) {
-      console.log(
-        `[weekly] 推荐标记已同步: articles=${articleStats.updatedEntries} (files=${articleStats.updatedFiles}), tools=${toolStats.updatedEntries} (files=${toolStats.updatedFiles})`
-      );
+      const parts = [
+        `articles=${articleStats.updatedEntries} (files=${articleStats.updatedFiles})`,
+        `tools=${toolStats.updatedEntries} (files=${toolStats.updatedFiles})`,
+      ];
+      if (syncLife) {
+        parts.push(`life=${lifeStats.updatedEntries} (files=${lifeStats.updatedFiles})`);
+      }
+      if (syncFood) {
+        parts.push(`food=${foodStats.updatedEntries} (files=${foodStats.updatedFiles})`);
+      }
+      if (syncExercise) {
+        parts.push(
+          `exercise=${exerciseStats.updatedEntries} (files=${exerciseStats.updatedFiles})`
+        );
+      }
+      if (syncMusic) {
+        parts.push(`music=${musicStats.updatedEntries} (files=${musicStats.updatedFiles})`);
+      }
+      console.log(`[weekly] 推荐标记已同步: ${parts.join(', ')}`);
     } else {
       console.log('[weekly] 上一周推荐元数据无需变更 (0 changes)');
     }
@@ -2509,6 +2788,50 @@ export class WeeklyDataProvider implements IDataProvider {
       } catch (error) {
         console.warn(
           `同步工具推荐标记失败: ${filePath}, 错误: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    return { updatedFiles, updatedEntries };
+  }
+
+  private async syncLogRecommendedFlags(
+    historyUrls: Set<string>,
+    sourceInput: DataSourceInput | undefined,
+    label: string
+  ): Promise<{ updatedFiles: number; updatedEntries: number }> {
+    const files = await this.collectFilesFromSources(sourceInput);
+    let updatedFiles = 0;
+    let updatedEntries = 0;
+
+    for (const filePath of files) {
+      try {
+        const raw = await fs.readFile(filePath, 'utf-8');
+        const parsed = matter(raw);
+        const data = parsed.data as Record<string, any>;
+        const normalizedUrl = this.normalizeUrl(
+          typeof data.url === 'string' ? data.url : undefined
+        );
+        if (!normalizedUrl) {
+          continue;
+        }
+
+        const nextRecommended = historyUrls.has(normalizedUrl);
+        const currentRecommended = Boolean(data.weekly_recommended);
+        if (currentRecommended === nextRecommended) {
+          continue;
+        }
+
+        data.weekly_recommended = nextRecommended;
+        const output = matter.stringify(parsed.content, data);
+        await fs.writeFile(filePath, output, 'utf-8');
+        updatedFiles += 1;
+        updatedEntries += 1;
+      } catch (error) {
+        console.warn(
+          `同步${label}推荐标记失败: ${filePath}, 错误: ${
             error instanceof Error ? error.message : String(error)
           }`
         );
@@ -2676,15 +2999,24 @@ export class WeeklyDataProvider implements IDataProvider {
     for (const filePath of files) {
       try {
         const stat = await fs.stat(filePath);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const parsed = matter(content);
+        const data = parsed.data as Record<string, any>;
+        const frontmatterDate = this.parseHistoryDate(
+          data.week_end ?? data.weekEnd ?? data.date ?? data.modified ?? data.created
+        );
+        const compareTs = frontmatterDate
+          ? frontmatterDate.getTime()
+          : stat.mtimeMs;
+
         // 同一周反复生成不应触发“已推荐”过滤，只看当前周之前的历史输出。
-        if (stat.mtimeMs >= weekStartTs) {
+        if (compareTs >= weekStartTs) {
           continue;
         }
-        if (lowerBound !== undefined && stat.mtimeMs < lowerBound) {
+        if (lowerBound !== undefined && compareTs < lowerBound) {
           continue;
         }
 
-        const content = await fs.readFile(filePath, 'utf-8');
         for (const url of this.extractUrls(content)) {
           result.add(url);
         }
@@ -2703,6 +3035,30 @@ export class WeeklyDataProvider implements IDataProvider {
       .map((url) => this.normalizeUrl(url))
       .filter((url): url is string => Boolean(url));
     return Array.from(new Set(normalized));
+  }
+
+  private parseHistoryDate(raw: unknown): Date | undefined {
+    if (!raw) {
+      return undefined;
+    }
+    if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+      return raw;
+    }
+    if (typeof raw !== 'string') {
+      return undefined;
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const normalized = trimmed.includes('T')
+      ? trimmed
+      : trimmed.replace(' ', 'T');
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      return undefined;
+    }
+    return parsed;
   }
 
   private hasBeenRecommendedByUrl(

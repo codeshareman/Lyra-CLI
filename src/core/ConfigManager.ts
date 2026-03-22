@@ -28,7 +28,7 @@ export class ConfigManager implements IConfigManager {
   private hookManager: IHookManager | null = null;
 
   constructor(hookManager?: IHookManager) {
-    this.explorer = cosmiconfig('content-generator', {
+    this.explorer = cosmiconfig('lyra', {
       searchPlaces: [
         'package.json',
         '.lyrarc',
@@ -83,12 +83,12 @@ export class ConfigManager implements IConfigManager {
       }
 
       this.loadedConfig = config;
-      
+
       // 加载并注册 hooks（如果提供了 HookManager）
       if (this.hookManager) {
         this.loadHooks(config);
       }
-      
+
       return config;
     } catch (error) {
       if (error instanceof Error && error.message.includes('validation failed')) {
@@ -112,7 +112,7 @@ export class ConfigManager implements IConfigManager {
     if (!config) {
       return null;
     }
-    
+
     // Ensure the returned value is properly typed as TemplateConfig
     return config as TemplateConfig;
   }
@@ -274,8 +274,7 @@ export class ConfigManager implements IConfigManager {
       }
     } catch (error) {
       errors.push(
-        `模板 ${templateType}.${sourceName}: 数据源配置处理失败 - ${
-          error instanceof Error ? error.message : String(error)
+        `模板 ${templateType}.${sourceName}: 数据源配置处理失败 - ${error instanceof Error ? error.message : String(error)
         }`
       );
     }
@@ -363,6 +362,7 @@ export class ConfigManager implements IConfigManager {
     return {
       global,
       templates,
+      modules: userConfig.modules ? { ...userConfig.modules } : undefined,
     };
   }
 
@@ -401,21 +401,21 @@ export class ConfigManager implements IConfigManager {
       content: this.deepMerge(defaultConfig.content, userConfig.content || {}),
       branding: userConfig.branding
         ? {
-            ...defaultConfig.branding,
-            ...userConfig.branding,
-          }
+          ...defaultConfig.branding,
+          ...userConfig.branding,
+        }
         : defaultConfig.branding,
       schedule: userConfig.schedule
         ? {
-            ...defaultConfig.schedule,
-            ...userConfig.schedule,
-          }
+          ...defaultConfig.schedule,
+          ...userConfig.schedule,
+        }
         : defaultConfig.schedule,
       ai: userConfig.ai
         ? {
-            ...defaultConfig.ai,
-            ...userConfig.ai,
-          }
+          ...defaultConfig.ai,
+          ...userConfig.ai,
+        }
         : defaultConfig.ai,
       templateVersion: this.resolveTemplateVersion(defaultConfig, userConfig),
     };
@@ -541,8 +541,7 @@ export class ConfigManager implements IConfigManager {
         } catch (error) {
           // Hook 加载失败时记录警告但继续处理
           console.warn(
-            `加载 hook 失败: ${templateType}.${hookType} (${hookPath}): ${
-              error instanceof Error ? error.message : String(error)
+            `加载 hook 失败: ${templateType}.${hookType} (${hookPath}): ${error instanceof Error ? error.message : String(error)
             }`
           );
         }

@@ -49,7 +49,7 @@ export class LocalModelProvider implements IAIProvider {
         if (attempt === this.maxRetries || !this.shouldRetry(error)) {
           throw error;
         }
-        
+
         // 本地模型重试间隔较短
         await this.delay(100);
       }
@@ -147,19 +147,19 @@ ${content}
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      
+
       if (error instanceof AIError) {
         throw error; // Re-throw AIError as-is
       }
-      
+
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
           throw new AIError(AIErrorType.TIMEOUT, 'Request timeout');
         }
-        
+
         if (this.isLikelyNetworkError(error.message)) {
           throw new AIError(
-            AIErrorType.NETWORK, 
+            AIErrorType.NETWORK,
             'Cannot connect to local model server. Please ensure Ollama is running.',
             error
           );

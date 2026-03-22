@@ -472,6 +472,28 @@ title: 刻意练习复盘
     expect(prompt).toContain('平台图像系统提示词：SYS-IMAGE');
   });
 
+  it('应在 image 标记处插入插图', () => {
+    const content = [
+      '## 第一节',
+      '',
+      '这里是正文。',
+      '',
+      '<!--image-->',
+      '',
+      '## 第二节',
+      '',
+      '<!--image-->',
+      '',
+      '更多内容。',
+    ].join('\n');
+    const updated = (cli as any).insertInlineImagesIntoContent(content, [
+      { index: 4, markdown: '![图1](path/1.png)' },
+      { index: 8, markdown: '![图2](path/2.png)' },
+    ]);
+    expect(updated).toContain('这里是正文。\n\n![图1](path/1.png)\n');
+    expect(updated).toContain('## 第二节\n\n![图2](path/2.png)\n');
+  });
+
   it('应自动推断图像生成模式', () => {
     expect((cli as any).inferImageMode({ mask: 'm.png' })).toBe('edit');
     expect((cli as any).inferImageMode({ editText: 'edit' })).toBe('edit');

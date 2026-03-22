@@ -94,6 +94,7 @@ export interface SystemConfig {
   templates: {
     [templateType: string]: TemplateConfig;
   };
+  modules?: Record<string, any>;
 }
 
 export interface GlobalConfig {
@@ -335,6 +336,9 @@ export interface FoodRecord {
   images: string[];            // 图片数组
   date: Date;
   rating?: number;
+  location?: string;          // 地点
+  channel?: string;           // 渠道
+  place?: string;             // 场所
   category?: string;
   path?: string;
 }

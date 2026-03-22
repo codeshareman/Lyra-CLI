@@ -97,6 +97,7 @@ interface PromptModuleConfig {
   key: string;
   label: string;
   moduleDir: string;
+  outputDir?: string;
   promptFile?: string;
   platformPromptFiles: Record<string, string>;
   sources: string[];
@@ -124,6 +125,10 @@ interface ArticleImageConfig {
   ratio?: '4:3' | '16:9';
   outputDir?: string;
   insertCoverImage?: boolean;
+  inlineEnabled?: boolean;
+  inlineMaxBodyImages?: number;
+  inlineMaxPerModule?: number;
+  inlineRatio?: '4:3' | '16:9';
   promptDir?: string;
   promptMap?: Record<string, string>;
   usePlatformImageSystem?: boolean;
@@ -153,6 +158,12 @@ interface ArticleImageConfig {
   coverRatio?: string;
   coverAiEndpoint?: string;
   coverAiApiKeyEnv?: string;
+  coverAiProvider?: string;
+  coverAiModel?: string;
+  coverAiSteps?: number;
+  coverAiWidth?: number;
+  coverAiHeight?: number;
+  coverAiResponseFormat?: string;
   coverAiResponseUrl?: string;
   coverAiResponseBase64?: string;
   coverAiResponseMime?: string;
@@ -437,6 +448,7 @@ export class CLIInterface {
       .option('--idea <text>', '你想写什么')
       .option('--requirements <text>', '写作要求（风格、结构、长度、禁用词等）')
       .option('--source <path>', '素材文件路径，可自动注入原文')
+      .option('--from-article <path>', '使用已有 Markdown 生成封面/插图')
       .option('--profiles <path>', 'Prompt profiles JSON 文件路径', '.lyra-prompts.json')
       .option('--module-prompt <path>', '模块 Prompt 文件路径（覆盖配置）')
       .option('--platform-rules <path>', '平台规则 JSON 文件路径')
@@ -459,6 +471,7 @@ export class CLIInterface {
   $ lyra article --platform zhihu --module 声图志 --idea "成都春天的街头声音"
   $ lyra article --module 生活志 --idea "这周通勤观察" --dry-run
   $ lyra article --module 声图志 --idea "夜跑时听到的街头声音"
+  $ lyra article --module ai --from-article ./Output/Z°\\ North/Z°N\\ AI\\ 专栏/drafts/CI持续集成到底在做什么.md
   $ lyra article --interactive --config ./.lyrarc.json
 `
         : `
@@ -664,7 +677,13 @@ export class CLIInterface {
 
     let configPath = options.config || options.file;
     if (!configPath) {
-      configPath = await this.findConfigFile();
+      const defaultPublishPath = path.resolve(process.cwd(), 'wechat_publish.json');
+      try {
+        await fs.access(defaultPublishPath);
+        configPath = defaultPublishPath;
+      } catch {
+        configPath = await this.findConfigFile();
+      }
     }
     if (!configPath) {
       if (process.stdout.isTTY) {
@@ -1032,7 +1051,13 @@ export class CLIInterface {
           console.log(`[publish] dry-run: 第${index + 1}篇缺少 thumb_media_id，且未提供封面图路径/URL`);
         }
       }
-      console.log(JSON.stringify({ mode: args.mode, draftPayload: payload }, null, 2));
+      const articleSummaries = (payload.articles || []).map((item: any, idx: number) => ({
+        index: idx + 1,
+        title: item.title,
+        hasThumbMediaId: Boolean(item.thumb_media_id),
+        contentLength: typeof item.content === 'string' ? item.content.length : 0,
+      }));
+      console.log(JSON.stringify({ mode: args.mode, draftPayload: { articles: articleSummaries } }, null, 2));
       return;
     }
 
@@ -1063,13 +1088,31 @@ export class CLIInterface {
       if (!thumbSource) {
         throw new Error('缺少 thumb_media_id，且未提供封面图路径/URL（thumb_image_path 或 thumb_image_url）');
       }
-      const uploaded = await this.uploadWechatThumbMedia({
-        baseUrl: wechatConfigTyped.api_base || 'https://api.weixin.qq.com/cgi-bin',
-        accessToken,
-        source: thumbSource,
-        endpoint: wechatConfigTyped.thumb_upload_endpoint || '/material/add_material?type=thumb',
-      });
-      payload = this.assignDraftThumbMedia(payload, uploaded.media_id, index);
+      try {
+        const uploaded = await this.uploadWechatThumbMedia({
+          baseUrl: wechatConfigTyped.api_base || 'https://api.weixin.qq.com/cgi-bin',
+          accessToken,
+          source: thumbSource,
+          endpoint: wechatConfigTyped.thumb_upload_endpoint || '/material/add_material?type=thumb',
+        });
+        payload = this.assignDraftThumbMedia(payload, uploaded.media_id, index);
+      } catch (error) {
+        if (this.shouldUsePlaceholderCover(articleConfig)) {
+          const placeholderPath = await this.generatePlaceholderCover({
+            title: articleConfig.title,
+            ratio: String(articleConfig.cover_ratio || '16:9'),
+          });
+          const uploaded = await this.uploadWechatThumbMedia({
+            baseUrl: wechatConfigTyped.api_base || 'https://api.weixin.qq.com/cgi-bin',
+            accessToken,
+            source: { type: 'path', value: placeholderPath },
+            endpoint: wechatConfigTyped.thumb_upload_endpoint || '/material/add_material?type=thumb',
+          });
+          payload = this.assignDraftThumbMedia(payload, uploaded.media_id, index);
+        } else {
+          throw error;
+        }
+      }
     }
 
     const baseUrl = (wechatConfig as any).api_base || 'https://api.weixin.qq.com/cgi-bin';
@@ -1330,10 +1373,26 @@ export class CLIInterface {
     if (typeof moduleImage.inlinePromptBase === 'string' && moduleImage.inlinePromptBase.trim()) {
       merged.inlinePromptBase = moduleImage.inlinePromptBase.trim();
     }
+    if (moduleImage.inline && typeof moduleImage.inline === 'object') {
+      const inline = moduleImage.inline as Record<string, any>;
+      copyIf('inlineEnabled', inline.enabled);
+      copyIf('inlineMaxBodyImages', inline.maxBodyImages);
+      copyIf('inlineMaxPerModule', inline.maxPerModule);
+      copyIf('inlineRatio', inline.ratio);
+      if (typeof inline.promptBase === 'string' && inline.promptBase.trim()) {
+        merged.inlinePromptBase = inline.promptBase.trim();
+      }
+    }
     copyIf('coverSourceOrder', moduleImage.coverSourceOrder);
     copyIf('coverRatio', moduleImage.coverRatio);
     copyIf('coverAiEndpoint', moduleImage.coverAiEndpoint);
     copyIf('coverAiApiKeyEnv', moduleImage.coverAiApiKeyEnv);
+    copyIf('coverAiProvider', moduleImage.coverAiProvider);
+    copyIf('coverAiModel', moduleImage.coverAiModel);
+    copyIf('coverAiSteps', moduleImage.coverAiSteps);
+    copyIf('coverAiWidth', moduleImage.coverAiWidth);
+    copyIf('coverAiHeight', moduleImage.coverAiHeight);
+    copyIf('coverAiResponseFormat', moduleImage.coverAiResponseFormat);
     copyIf('coverAiResponseUrl', moduleImage.coverAiResponseUrl);
     copyIf('coverAiResponseBase64', moduleImage.coverAiResponseBase64);
     copyIf('coverAiResponseMime', moduleImage.coverAiResponseMime);
@@ -1473,14 +1532,37 @@ export class CLIInterface {
     const apiKeyEnvName = String(config.cover_ai_api_key_env || config.coverAiApiKeyEnv || '').trim();
     const apiKey = apiKeyEnvName ? String(process.env[apiKeyEnvName] || '').trim() : '';
     const ratio = String(config.cover_ratio || '16:9');
-    const payload = {
-      title: config.title,
-      content: this.stripHtml(html),
-      prompt: config.cover_prompt || config.coverPrompt || '',
-      ratio,
-      mode: config.cover_mode || config.coverMode,
-      input: config.cover_input || config.coverInput,
-    };
+    const provider = String(config.cover_ai_provider || config.coverAiProvider || '').trim().toLowerCase();
+    const prompt = config.cover_prompt || config.coverPrompt || '';
+    const input = config.cover_input || config.coverInput;
+
+    const payload = provider === 'together'
+      ? this.buildTogetherImagePayload({
+        prompt,
+        ratio,
+        model: String(config.cover_ai_model || config.coverAiModel || 'black-forest-labs/FLUX.1-schnell').trim(),
+        steps: Number(config.cover_ai_steps || config.coverAiSteps || 20),
+        width: Number(config.cover_ai_width || config.coverAiWidth || 0),
+        height: Number(config.cover_ai_height || config.coverAiHeight || 0),
+        responseFormat: String(config.cover_ai_response_format || config.coverAiResponseFormat || 'url').trim(),
+      })
+      : provider === 'modelscope'
+        ? this.buildModelscopeImagePayload({
+          prompt,
+          ratio,
+          model: String(config.cover_ai_model || config.coverAiModel || 'MAILAND/majicflus_v1').trim(),
+          width: Number(config.cover_ai_width || config.coverAiWidth || 0),
+          height: Number(config.cover_ai_height || config.coverAiHeight || 0),
+          steps: Number(config.cover_ai_steps || config.coverAiSteps || 0),
+        })
+        : {
+          title: config.title,
+          content: this.stripHtml(html),
+          prompt,
+          ratio,
+          mode: config.cover_mode || config.coverMode,
+          input,
+        };
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (apiKey) {
@@ -1497,8 +1579,12 @@ export class CLIInterface {
       60000
     ) as any;
 
-    const urlPath = config.cover_ai_response_url || config.coverAiResponseUrl || 'imageUrl';
-    const base64Path = config.cover_ai_response_base64 || config.coverAiResponseBase64 || 'imageBase64';
+    const urlPath = config.cover_ai_response_url || config.coverAiResponseUrl
+      || (provider === 'together'
+        ? 'data.0.url'
+        : (provider === 'modelscope' ? 'images.0.url' : 'imageUrl'));
+    const base64Path = config.cover_ai_response_base64 || config.coverAiResponseBase64
+      || (provider === 'together' ? 'data.0.b64_json' : 'imageBase64');
     const mimePath = config.cover_ai_response_mime || config.coverAiResponseMime || 'mime';
     const imageUrl = this.readByPath(result, urlPath);
     if (typeof imageUrl === 'string' && imageUrl.trim()) {
@@ -1595,6 +1681,62 @@ export class CLIInterface {
       return { type: 'url', value: imageUrl.trim() };
     }
     return null;
+  }
+
+  private buildTogetherImagePayload(args: {
+    prompt: string;
+    ratio: string;
+    model: string;
+    steps: number;
+    width: number;
+    height: number;
+    responseFormat: string;
+  }): Record<string, any> {
+    const ratio = args.ratio === '4:3' ? '4:3' : '16:9';
+    const size = this.resolveImageSizeFromRatio(ratio);
+    const width = args.width > 0 ? args.width : size.width;
+    const height = args.height > 0 ? args.height : size.height;
+    return {
+      model: args.model || 'black-forest-labs/FLUX.1-schnell',
+      prompt: args.prompt,
+      width,
+      height,
+      steps: Number.isFinite(args.steps) && args.steps > 0 ? Math.floor(args.steps) : 20,
+      n: 1,
+      response_format: args.responseFormat || 'url',
+    };
+  }
+
+  private buildModelscopeImagePayload(args: {
+    prompt: string;
+    ratio: string;
+    model: string;
+    width: number;
+    height: number;
+    steps: number;
+  }): Record<string, any> {
+    const ratio = args.ratio === '4:3' ? '4:3' : '16:9';
+    const size = this.resolveImageSizeFromRatio(ratio);
+    const width = args.width > 0 ? args.width : size.width;
+    const height = args.height > 0 ? args.height : size.height;
+    const sizeLabel = `${width}x${height}`;
+    const payload: Record<string, any> = {
+      model: args.model || 'MAILAND/majicflus_v1',
+      prompt: args.prompt,
+      n: 1,
+      size: sizeLabel,
+    };
+    if (Number.isFinite(args.steps) && args.steps > 0) {
+      payload.steps = Math.floor(args.steps);
+    }
+    return payload;
+  }
+
+  private resolveImageSizeFromRatio(ratio: '4:3' | '16:9'): { width: number; height: number } {
+    if (ratio === '4:3') {
+      return { width: 1024, height: 768 };
+    }
+    return { width: 1280, height: 720 };
   }
 
   private stripHtml(html: string): string {
@@ -1711,7 +1853,8 @@ export class CLIInterface {
 
     const mediaId = result?.media_id;
     if (!mediaId) {
-      throw new Error('上传封面图失败，未返回 media_id');
+      const detail = typeof result === 'object' ? JSON.stringify(result) : String(result);
+      throw new Error(`上传封面图失败，未返回 media_id。响应: ${detail}`);
     }
     return { media_id: mediaId };
   }
@@ -2745,8 +2888,28 @@ export class CLIInterface {
         || runtimeConfig.defaultTopic
         || ''
       ).trim();
+
+      const fromArticleRaw = String(options.fromArticle || '').trim();
+      if (fromArticleRaw && !moduleRaw && typeof options.module !== 'string') {
+        try {
+          const candidatePath = this.resolvePathFromConfig(runtimeConfig.configDir, fromArticleRaw)
+            || path.resolve(process.cwd(), fromArticleRaw);
+          if (await this.fileExists(candidatePath)) {
+            const rawArticle = await fs.readFile(candidatePath, 'utf-8');
+            const parsed = matter(rawArticle);
+            const category = String((parsed.data as any)?.category || '').trim();
+            if (category) {
+              moduleRaw = category;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       let moduleKey = this.resolveModuleKey(runtimeConfig, moduleRaw || undefined);
       const moduleConfigByCli = moduleKey ? runtimeConfig.modules[moduleKey] : undefined;
+      const moduleLabelByCli = moduleConfigByCli?.label || moduleRaw || '';
       const suggestionDirs = this.resolveSuggestionDirs(
         options.from,
         (moduleConfigByCli?.sources && moduleConfigByCli.sources.length > 0)
@@ -2756,6 +2919,79 @@ export class CLIInterface {
       const shouldSuggestExplicit = options.suggest === true;
       const shouldAutoIdea = options.autoIdea === true;
       let suggestions: TopicSuggestion[] = [];
+
+      if (fromArticleRaw && entryMode === 'article') {
+        const articlePath = this.resolvePathFromConfig(runtimeConfig.configDir, fromArticleRaw)
+          || path.resolve(process.cwd(), fromArticleRaw);
+        if (!(await this.fileExists(articlePath))) {
+          throw new Error(`找不到文章文件: ${articlePath}`);
+        }
+        const rawArticle = await fs.readFile(articlePath, 'utf-8');
+        const parsed = matter(rawArticle);
+        const frontmatter = (parsed.data && typeof parsed.data === 'object') ? parsed.data as Record<string, any> : {};
+        const title = String(frontmatter.title || '').trim()
+          || this.deriveTitleFromRaw(parsed.content || '', path.basename(articlePath, '.md'));
+        let imagePrompt = String(frontmatter.image_prompt_nanobana_pro || frontmatter.image_prompt || '').trim();
+        if (!imagePrompt) {
+          imagePrompt = this.buildFallbackNanobanaPrompt({
+            title,
+            idea: title,
+            moduleName: moduleLabelByCli || moduleRaw || 'article',
+            platform: String(options.platform || runtimeConfig.defaultPlatform || 'wechat'),
+          });
+        }
+        let payload: GeneratedArticlePayload = {
+          title,
+          content: String(parsed.content || ''),
+          imagePromptNanobanaPro: imagePrompt,
+          coverImage: String(frontmatter.cover_image || ''),
+          coverImageRatio: String(frontmatter.cover_image_ratio || ''),
+        };
+        const moduleConfig = moduleKey ? runtimeConfig.modules[moduleKey] : undefined;
+        payload = await this.maybeGenerateArticleCoverImage({
+          payload,
+          runtimeConfig,
+          moduleConfig,
+          moduleName: moduleLabelByCli || moduleRaw || 'article',
+          platform: String(options.platform || runtimeConfig.defaultPlatform || 'wechat'),
+        });
+        payload = await this.maybeGenerateArticleInlineImages({
+          payload,
+          runtimeConfig,
+          moduleConfig,
+          moduleName: moduleLabelByCli || moduleRaw || 'article',
+          platform: String(options.platform || runtimeConfig.defaultPlatform || 'wechat'),
+        });
+
+        let updatedContent = payload.content;
+        if (
+          payload.coverImage &&
+          runtimeConfig.articleImage.insertCoverImage !== false &&
+          !updatedContent.includes(payload.coverImage)
+        ) {
+          updatedContent = `![${this.escapeMarkdownInline(title)}](${payload.coverImage})\n\n${updatedContent}`;
+        }
+
+        const updatedFrontmatter = { ...frontmatter };
+        if (payload.coverImage) {
+          updatedFrontmatter.cover_image = payload.coverImage;
+        }
+        if (payload.coverImageRatio) {
+          updatedFrontmatter.cover_image_ratio = payload.coverImageRatio;
+        }
+        if (!updatedFrontmatter.image_prompt_nanobana_pro && payload.imagePromptNanobanaPro) {
+          updatedFrontmatter.image_prompt_nanobana_pro = payload.imagePromptNanobanaPro;
+        }
+
+        const outputPath = options.out
+          ? (this.resolvePathFromConfig(runtimeConfig.configDir, options.out)
+            || path.resolve(process.cwd(), options.out))
+          : articlePath;
+        const serialized = matter.stringify(updatedContent, updatedFrontmatter);
+        await fs.writeFile(outputPath, serialized.endsWith('\n') ? serialized : `${serialized}\n`, 'utf-8');
+        console.log(`${logPrefix} 已更新图片: ${outputPath}`);
+        return;
+      }
 
       if (options.list) {
         const entries = Object.entries(profiles);
@@ -3037,6 +3273,13 @@ export class CLIInterface {
           );
         }
         generatedArticle = await this.maybeGenerateArticleCoverImage({
+          payload: generatedArticle,
+          runtimeConfig,
+          moduleConfig,
+          moduleName: moduleLabel || moduleName || '生活志',
+          platform: platformKey,
+        });
+        generatedArticle = await this.maybeGenerateArticleInlineImages({
           payload: generatedArticle,
           runtimeConfig,
           moduleConfig,
@@ -3494,6 +3737,15 @@ export class CLIInterface {
       const moduleDir = path.isAbsolute(moduleDirRaw)
         ? moduleDirRaw
         : path.resolve(args.modulesBaseDir, moduleDirRaw);
+      const outputDirRaw =
+        typeof moduleValue.outputDir === 'string' && moduleValue.outputDir.trim()
+          ? moduleValue.outputDir.trim()
+          : undefined;
+      const outputDir = outputDirRaw
+        ? (path.isAbsolute(outputDirRaw)
+          ? outputDirRaw
+          : path.resolve(args.modulesBaseDir, outputDirRaw))
+        : undefined;
       const promptObj = (moduleValue.prompt && typeof moduleValue.prompt === 'object' && !Array.isArray(moduleValue.prompt))
         ? (moduleValue.prompt as Record<string, any>)
         : null;
@@ -3547,6 +3799,7 @@ export class CLIInterface {
         key,
         label,
         moduleDir,
+        outputDir,
         promptFile,
         platformPromptFiles,
         sources,
@@ -3716,8 +3969,27 @@ export class CLIInterface {
     const globalCover = (globalImage.cover && typeof globalImage.cover === 'object')
       ? (globalImage.cover as Record<string, unknown>)
       : {};
+    const templateInline = (templateImageConfig.inline && typeof templateImageConfig.inline === 'object')
+      ? (templateImageConfig.inline as Record<string, unknown>)
+      : {};
+    const globalInline = (globalImage.inline && typeof globalImage.inline === 'object')
+      ? (globalImage.inline as Record<string, unknown>)
+      : {};
     const pickBool = (value: unknown): boolean | undefined =>
       typeof value === 'boolean' ? value : undefined;
+    const inlineEnabled = (templateInline as any).enabled ?? (globalInline as any).enabled;
+    const inlineMaxBodyImages = this.parsePositiveInt(
+      (templateInline as any).maxBodyImages ?? (globalInline as any).maxBodyImages,
+      0
+    );
+    const inlineMaxPerModule = this.parsePositiveInt(
+      (templateInline as any).maxPerModule ?? (globalInline as any).maxPerModule,
+      0
+    );
+    const inlineRatioRaw = String(
+      (templateInline as any).ratio ?? (globalInline as any).ratio ?? ratio
+    ).trim();
+    const inlineRatio = inlineRatioRaw === '4:3' ? '4:3' : '16:9';
 
     return {
       enabled,
@@ -3748,6 +4020,10 @@ export class CLIInterface {
             ? pickBool((globalImage.cover as Record<string, unknown>).insertIntoArticle)
             : pickBool(globalImage.insertCoverImage)
         ) ?? true,
+      inlineEnabled: inlineEnabled === undefined ? false : inlineEnabled !== false,
+      inlineMaxBodyImages: inlineMaxBodyImages || undefined,
+      inlineMaxPerModule: inlineMaxPerModule || undefined,
+      inlineRatio,
       promptDir: String(
         promptingImage.promptDir
         || templateImageConfig.promptDir
@@ -4753,7 +5029,8 @@ export class CLIInterface {
       title: this.sanitizeTitleFilename(args.idea) || slug,
       timestamp,
     });
-    const moduleDir = args.moduleConfig?.moduleDir
+    const moduleDir = args.moduleConfig?.outputDir
+      || args.moduleConfig?.moduleDir
       || path.resolve(args.runtimeConfig.moduleBaseDir, this.resolveModuleDirectoryName(moduleName));
     return path.resolve(moduleDir, filename);
   }
@@ -4765,12 +5042,15 @@ export class CLIInterface {
     title: string;
   }): string {
     const moduleName = args.moduleConfig?.label || args.moduleName || 'article';
-    const moduleDir = args.moduleConfig?.moduleDir
+    const moduleDir = args.moduleConfig?.outputDir
+      || args.moduleConfig?.moduleDir
       || path.resolve(args.runtimeConfig.moduleBaseDir, this.resolveModuleDirectoryName(moduleName));
-    const draftsDir = path.resolve(
-      moduleDir,
-      args.runtimeConfig.outputDraftsDirName || args.runtimeConfig.moduleDraftsDirName || 'drafts'
-    );
+    const draftsDir = args.moduleConfig?.outputDir
+      ? moduleDir
+      : path.resolve(
+        moduleDir,
+        args.runtimeConfig.outputDraftsDirName || args.runtimeConfig.moduleDraftsDirName || 'drafts'
+      );
     const titleForFilename = this.sanitizeTitleFilename(args.title) || '未命名文章';
     return path.resolve(draftsDir, `${titleForFilename}.md`);
   }
@@ -6113,6 +6393,12 @@ export class CLIInterface {
       cover_mode: this.inferImageMode(normalizedInput),
       cover_ai_endpoint: effectiveImageConfig.coverAiEndpoint,
       cover_ai_api_key_env: effectiveImageConfig.coverAiApiKeyEnv,
+      cover_ai_provider: effectiveImageConfig.coverAiProvider,
+      cover_ai_model: effectiveImageConfig.coverAiModel,
+      cover_ai_steps: effectiveImageConfig.coverAiSteps,
+      cover_ai_width: effectiveImageConfig.coverAiWidth,
+      cover_ai_height: effectiveImageConfig.coverAiHeight,
+      cover_ai_response_format: effectiveImageConfig.coverAiResponseFormat,
       cover_ai_response_url: effectiveImageConfig.coverAiResponseUrl,
       cover_ai_response_base64: effectiveImageConfig.coverAiResponseBase64,
       cover_ai_response_mime: effectiveImageConfig.coverAiResponseMime,
@@ -6127,14 +6413,246 @@ export class CLIInterface {
       configDir: args.runtimeConfig.configDir,
     });
     if (coverResult) {
+      const persisted = await this.persistImageIfNeeded({
+        source: coverResult,
+        targetDir: coverDir,
+        fileStem: `${this.sanitizeTitleFilename(args.payload.title)}-cover-${ratio.replace(':', 'x')}`,
+      });
       return {
         ...args.payload,
-        coverImage: coverResult.value,
+        coverImage: persisted.value,
         coverImageRatio: ratio,
       };
     }
 
     return args.payload;
+  }
+
+  private async maybeGenerateArticleInlineImages(args: {
+    payload: GeneratedArticlePayload;
+    runtimeConfig: ResolvedPromptRuntimeConfig;
+    moduleConfig?: PromptModuleConfig;
+    moduleName: string;
+    platform: string;
+  }): Promise<GeneratedArticlePayload> {
+    const effectiveImageConfig = this.applyModuleImageOverrides(
+      args.runtimeConfig.articleImage,
+      args.moduleConfig?.coverImage
+    );
+    if (!effectiveImageConfig.inlineEnabled) {
+      return args.payload;
+    }
+    const maxImages = Math.max(
+      0,
+      effectiveImageConfig.inlineMaxBodyImages || 0,
+      effectiveImageConfig.inlineMaxPerModule || 0
+    );
+    if (!maxImages) {
+      return args.payload;
+    }
+
+    const content = String(args.payload.content || '');
+    if (!content.trim()) {
+      return args.payload;
+    }
+
+    const sections = this.extractInlineImageSections(content);
+    if (sections.length === 0) {
+      return args.payload;
+    }
+
+    const moduleLabel = args.moduleConfig?.label || args.moduleName || 'article';
+    const moduleDir = args.moduleConfig?.moduleDir
+      || path.resolve(args.runtimeConfig.outputBaseDir, this.resolveModuleDirectoryName(moduleLabel));
+    const imagesDir = effectiveImageConfig.outputDir
+      ? path.resolve(args.runtimeConfig.configDir || process.cwd(), effectiveImageConfig.outputDir)
+      : path.resolve(moduleDir, 'images');
+    await fs.mkdir(imagesDir, { recursive: true });
+
+    const ratio = this.resolveCoverRatio(
+      String(effectiveImageConfig.inlineRatio || effectiveImageConfig.ratio || '16:9')
+    );
+    const insertions: Array<{ index: number; markdown: string }> = [];
+    const selected = sections.slice(0, maxImages);
+
+    for (let i = 0; i < selected.length; i += 1) {
+      const section = selected[i];
+      const prompt = this.buildInlineImagePrompt({
+        title: args.payload.title,
+        moduleName: moduleLabel,
+        sectionTitle: section.heading,
+        snippet: section.snippet,
+        promptBase: effectiveImageConfig.inlinePromptBase || effectiveImageConfig.coverPromptBase || '',
+        fallbackPrompt: args.payload.imagePromptNanobanaPro || '',
+      });
+
+      const autoConfig: Record<string, any> = {
+        title: args.payload.title,
+        cover_prompt: prompt,
+        cover_ratio: ratio,
+        cover_source_order: effectiveImageConfig.coverSourceOrder || ['script', 'unsplash', 'placeholder'],
+        cover_input: this.normalizeImageInput(
+          effectiveImageConfig.input,
+          args.runtimeConfig.configDir,
+          args.runtimeConfig.outputBaseDir,
+          { content: args.payload.content, title: args.payload.title }
+        ),
+        cover_mode: 'inline',
+        cover_ai_endpoint: effectiveImageConfig.coverAiEndpoint,
+        cover_ai_api_key_env: effectiveImageConfig.coverAiApiKeyEnv,
+        cover_ai_provider: effectiveImageConfig.coverAiProvider,
+        cover_ai_model: effectiveImageConfig.coverAiModel,
+        cover_ai_steps: effectiveImageConfig.coverAiSteps,
+        cover_ai_width: effectiveImageConfig.coverAiWidth,
+        cover_ai_height: effectiveImageConfig.coverAiHeight,
+        cover_ai_response_format: effectiveImageConfig.coverAiResponseFormat,
+        cover_ai_response_url: effectiveImageConfig.coverAiResponseUrl,
+        cover_ai_response_base64: effectiveImageConfig.coverAiResponseBase64,
+        cover_ai_response_mime: effectiveImageConfig.coverAiResponseMime,
+        unsplash_access_key_env: effectiveImageConfig.unsplashAccessKeyEnv,
+        unsplash_query: effectiveImageConfig.unsplashQuery,
+        cover_script: effectiveImageConfig.script,
+      };
+
+      const imageResult = await this.resolveAutoCoverSource({
+        config: autoConfig,
+        html: section.snippet || args.payload.content,
+        configDir: args.runtimeConfig.configDir,
+      });
+      if (!imageResult) {
+        continue;
+      }
+
+      const persisted = await this.persistImageIfNeeded({
+        source: imageResult,
+        targetDir: imagesDir,
+        fileStem: `${this.sanitizeTitleFilename(args.payload.title)}-inline-${i + 1}-${ratio.replace(':', 'x')}`,
+      });
+      const alt = this.escapeMarkdownInline(`${args.payload.title} - ${section.heading}`);
+      const markdown = `![${alt}](${persisted.value})`;
+      insertions.push({ index: section.insertAfterLine, markdown });
+    }
+
+    if (insertions.length === 0) {
+      return args.payload;
+    }
+
+    const updatedContent = this.insertInlineImagesIntoContent(content, insertions);
+    return { ...args.payload, content: updatedContent };
+  }
+
+  private buildInlineImagePrompt(args: {
+    title: string;
+    moduleName: string;
+    sectionTitle: string;
+    snippet: string;
+    promptBase: string;
+    fallbackPrompt: string;
+  }): string {
+    const base = String(args.promptBase || '').trim();
+    const snippet = String(args.snippet || '').trim();
+    const detail = snippet ? `内容摘要：${snippet}` : '';
+    const parts = [
+      base || args.fallbackPrompt || '根据文章内容生成一张可商用的插图。',
+      `文章标题：${args.title}`,
+      `模块：${args.moduleName}`,
+      `小节：${args.sectionTitle}`,
+      detail,
+      '要求：主体清晰、场景具体、避免文字水印或Logo。',
+    ].filter(Boolean);
+    return parts.join('\n');
+  }
+
+  private extractInlineImageSections(content: string): Array<{
+    heading: string;
+    insertAfterLine: number;
+    snippet: string;
+  }> {
+    const lines = content.split('\n');
+    const markers: number[] = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      if (lines[i].includes('<!--image-->')) {
+        markers.push(i);
+      }
+    }
+    if (markers.length === 0) {
+      return [];
+    }
+
+    return markers.map((index) => {
+      let heading = '插图';
+      for (let i = index - 1; i >= 0; i -= 1) {
+        const match = lines[i].match(/^##\s+(.+)$/);
+        if (match) {
+          heading = match[1].trim() || heading;
+          break;
+        }
+      }
+      const snippetLines = lines.slice(Math.max(0, index - 4), Math.min(lines.length, index + 4));
+      const snippet = this.stripMarkdown(snippetLines.join(' '));
+      return {
+        heading,
+        insertAfterLine: index,
+        snippet,
+      };
+    });
+  }
+
+  private insertInlineImagesIntoContent(
+    content: string,
+    insertions: Array<{ index: number; markdown: string }>
+  ): string {
+    const lines = content.split('\n');
+    const sorted = [...insertions].sort((a, b) => b.index - a.index);
+    for (const insertion of sorted) {
+      const insertAt = Math.min(lines.length - 1, Math.max(0, insertion.index));
+      // Replace marker line with image if possible
+      const markerLine = lines[insertAt] || '';
+      if (markerLine.includes('<!--image-->')) {
+        lines.splice(insertAt, 1, insertion.markdown);
+      } else {
+        lines.splice(insertAt + 1, 0, '', insertion.markdown, '');
+      }
+    }
+    return lines.join('\n');
+  }
+
+  private async persistImageIfNeeded(args: {
+    source: { type: 'path' | 'url'; value: string };
+    targetDir: string;
+    fileStem: string;
+  }): Promise<{ type: 'path' | 'url'; value: string }> {
+    if (args.source.type === 'url') {
+      return args.source;
+    }
+    const sourcePath = path.resolve(args.source.value);
+    const targetDir = path.resolve(args.targetDir);
+    if (sourcePath.startsWith(targetDir)) {
+      return args.source;
+    }
+    await fs.mkdir(targetDir, { recursive: true });
+    const ext = path.extname(sourcePath) || '.png';
+    let destPath = path.join(targetDir, `${args.fileStem}${ext}`);
+    if (await this.fileExists(destPath)) {
+      destPath = path.join(targetDir, `${args.fileStem}-${Date.now()}${ext}`);
+    }
+    await fs.copyFile(sourcePath, destPath);
+    return { type: 'path', value: destPath };
+  }
+
+  private stripMarkdown(input: string): string {
+    return String(input || '')
+      .replace(/`{1,3}[^`]*`{1,3}/g, ' ')
+      .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+      .replace(/\[[^\]]*]\([^)]*\)/g, ' ')
+      .replace(/[#>*_~-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 220);
+  }
+
+  private escapeMarkdownInline(input: string): string {
+    return String(input || '').replace(/[[\]\\]/g, '\\$&').trim();
   }
 
   private async resolveCoverPrompt(args: {

@@ -107,6 +107,48 @@ describe('ConfigManager', () => {
       expect(config.templates.weekly.template.path).toBe('./templates/weekly.hbs');
     });
 
+    it('should preserve modules configuration at top-level', async () => {
+      const configPath = path.join(tempDir, '.lyrarc.json');
+      const partialConfig = {
+        global: {
+          logLevel: 'info',
+          defaultTemplate: 'weekly',
+        },
+        templates: {
+          weekly: {
+            enabled: true,
+            template: { path: './templates/weekly.hbs' },
+            sources: {
+              clippings: './Clippings',
+              tools: './Tools',
+              notes: './Notes',
+            },
+            output: {
+              path: './output',
+              filename: 'weekly.md',
+            },
+            content: {},
+          },
+        },
+        modules: {
+          ai: {
+            label: 'AI 专栏',
+            moduleDir: 'Z°N AI 专栏',
+            outputDir: 'Z°N AI 专栏/drafts',
+          },
+        },
+      };
+
+      await fs.writeFile(configPath, JSON.stringify(partialConfig));
+
+      const config = await configManager.load(configPath);
+
+      expect(config.modules).toBeDefined();
+      expect(config.modules?.ai?.label).toBe('AI 专栏');
+      expect(config.modules?.ai?.moduleDir).toBe('Z°N AI 专栏');
+      expect(config.modules?.ai?.outputDir).toBe('Z°N AI 专栏/drafts');
+    });
+
     it('should throw error for invalid configuration', async () => {
       const configPath = path.join(tempDir, '.lyrarc.json');
       const invalidConfig = {

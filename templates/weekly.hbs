@@ -234,6 +234,16 @@ RANGE: {{formatDate metadata.weekStart "MM.dd"}} — {{formatDate metadata.weekE
 {{content}}
 {{/if}}
 
+{{#if location}}
+- 地点：{{location}}
+{{/if}}
+{{#if place}}
+- 场所：{{place}}
+{{/if}}
+{{#if channel}}
+- 渠道：{{channel}}
+{{/if}}
+
 {{#if image}}
 {{{renderImage image title}}}
 {{else if coverImage}}
@@ -271,6 +281,19 @@ RANGE: {{formatDate metadata.weekStart "MM.dd"}} — {{formatDate metadata.weekE
 
 {{#each content.food}}
 ### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}{{#if rating}} · {{rating}}/5{{/if}}
+
+{{#if rating}}
+- 评分：{{rating}}/5
+{{/if}}
+{{#if location}}
+- 地点：{{location}}
+{{/if}}
+{{#if place}}
+- 场所：{{place}}
+{{/if}}
+{{#if channel}}
+- 渠道：{{channel}}
+{{/if}}
 
 {{#if aiSummary}}
 {{aiSummary}}

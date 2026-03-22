@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://example.com/content-generator/schemas/enhanced-config.schema.json",
+  "$id": "https://example.com/lyra/schemas/enhanced-config.schema.json",
   "title": "Content Generator Enhanced Weekly Config",
   "description": "JSON Schema for enhanced weekly template configuration",
   "type": "object",

@@ -338,9 +338,9 @@ export class PlatformExporter implements IPlatformExporter {
       : DEFAULT_WECHAT_THEME;
     const wechatBackground = isWechat
       ? this.resolveWechatBackground(
-          options.backgroundImage,
-          options.backgroundPreset || 'grid'
-        )
+        options.backgroundImage,
+        options.backgroundPreset || 'grid'
+      )
       : { css: '', inlineStyle: '' };
 
     let styles = '';
@@ -358,10 +358,10 @@ export class PlatformExporter implements IPlatformExporter {
       : 'cg-article';
     const articleStyle = isWechat
       ? this.buildInlineStyleAttribute(
-          [this.getWechatArticleContainerStyle(wechatTheme), wechatBackground.inlineStyle]
-            .filter(Boolean)
-            .join('; ')
-        )
+        [this.getWechatArticleContainerStyle(wechatTheme), wechatBackground.inlineStyle]
+          .filter(Boolean)
+          .join('; ')
+      )
       : '';
     const helperToolbar = isWechat ? this.getWechatHelperToolbar() : '';
     const helperScript = isWechat ? this.getWechatCopyScript() : '';
@@ -572,7 +572,7 @@ export class PlatformExporter implements IPlatformExporter {
         heading3:
           'margin-top: 14px; margin-bottom: 8px; font-size: 17px; line-height: 1.42; font-weight: 700; color: #2b2319; font-family: Iowan Old Style,Palatino Linotype,Book Antiqua,Times New Roman,Georgia,Songti SC,STSong,serif',
         paragraph:
-          'margin: .66em 0; font-size: 16px; line-height: 1.9; color: #312b20; text-align: justify; letter-spacing: .004em; font-family: Iowan Old Style,Palatino Linotype,Book Antiqua,Times New Roman,Georgia,Songti SC,STSong,serif',
+          'margin: .66em 0; font-size: 16px; line-height: 1.9; color: #312b20; text-align: justify; letter-spacing: .004em; font-family: Iowan Old Style,Palatino Linotype,Book Antiqua,Times New Roman,Georgia,Songti SC,STSong,serif; word-wrap: break-word; overflow-wrap: anywhere; word-break: break-all',
         summaryParagraph:
           'margin: .48em 0 .72em; font-size: 14px; line-height: 1.84; color: #6a5d4b; text-align: justify; letter-spacing: .003em; font-family: Iowan Old Style,Palatino Linotype,Book Antiqua,Times New Roman,Georgia,Songti SC,STSong,serif',
         hr: 'border: 0; border-top: 3px solid #2b241b; margin: 0 0 28px',
@@ -1192,7 +1192,7 @@ export class PlatformExporter implements IPlatformExporter {
   private async readStyleFile(fileName: string, fallback: string): Promise<string> {
     const candidates = [
       path.join(this.styleDir, fileName),
-      path.join(process.cwd(), 'content-generator', 'src', 'export', 'styles', fileName),
+      path.join(process.cwd(), 'lyra', 'src', 'export', 'styles', fileName),
       path.join(process.cwd(), 'src', 'export', 'styles', fileName),
     ];
 
