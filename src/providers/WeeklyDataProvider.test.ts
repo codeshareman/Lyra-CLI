@@ -233,10 +233,26 @@ describe('WeeklyDataProvider', () => {
         .instances[1] as jest.Mocked<ToolFilter>;
       const newMockContentAggregator = (ContentAggregator as jest.MockedClass<typeof ContentAggregator>).mock
         .instances[1] as jest.Mocked<ContentAggregator>;
+      const newMockMetadataManager = (MetadataManager as jest.MockedClass<typeof MetadataManager>).mock
+        .instances[1] as jest.Mocked<MetadataManager>;
 
       newMockArticleFilter.filter = jest.fn().mockResolvedValue([]);
       newMockToolFilter.filter = jest.fn().mockResolvedValue([]);
       newMockContentAggregator.aggregate = jest.fn().mockResolvedValue([]);
+      newMockMetadataManager.generate = jest.fn().mockResolvedValue({
+        id: '20240101120000',
+        title: 'Weekly Issue #1',
+        type: 'weekly',
+        issueNumber: 1,
+        date: '2024-01-01',
+        weekStart: '2024-01-01',
+        weekEnd: '2024-01-07',
+        created: '2024-01-01T12:00:00.000Z',
+        modified: '2024-01-01T12:00:00.000Z',
+        status: 'published',
+        tags: ['weekly'],
+        publishedPlatforms: [],
+      });
 
       const options: CollectOptions = {
         date: new Date('2024-01-01'),

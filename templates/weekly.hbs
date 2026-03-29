@@ -276,6 +276,67 @@ RANGE: {{formatDate metadata.weekStart "MM.dd"}} — {{formatDate metadata.weekE
 {{/each}}
 {{/if}}
 
+{{#if (hasItems content.captures)}}
+## 瞬间片段
+
+{{#each content.captures}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}
+
+{{#if description}}
+{{description}}
+{{/if}}
+
+{{#if image}}
+{{{renderImage image title}}}
+{{else if coverImage}}
+{{{renderImage coverImage title}}}
+{{else if (hasItems images)}}
+{{{renderImages images}}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.movies)}}
+## 银幕观影
+
+{{#each content.movies}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}{{#if rating}} · {{rating}}/5{{/if}}
+
+{{#if review}}
+{{review}}
+{{/if}}
+
+{{#if director}}
+- 导演：{{director}}
+{{/if}}
+{{#if year}}
+- 年份：{{year}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
+{{#if (hasItems content.tv)}}
+## 剧集追更
+
+{{#each content.tv}}
+### {{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}{{#if rating}} · {{rating}}/5{{/if}}
+
+{{#if review}}
+{{review}}
+{{/if}}
+
+{{#if status}}
+- 状态：{{status}}
+{{/if}}
+{{#if (or season episode)}}
+- 进度：{{#if season}}第 {{season}} 季{{/if}} {{#if episode}}第 {{episode}} 集{{/if}}
+{{/if}}
+
+{{/each}}
+{{/if}}
+
 {{#if (hasItems content.food)}}
 ## 饮食记录
 
@@ -326,7 +387,7 @@ RANGE: {{formatDate metadata.weekStart "MM.dd"}} — {{formatDate metadata.weekE
 ## 本周旋律
 
 {{#each content.music}}
-- **{{#if url}}[{{title}}]({{{url}}}){{else}}{{title}}{{/if}}** - {{artist}}{{#if album}}（{{album}}）{{/if}}{{#if feeling}}：{{feeling}}{{/if}}
+- **{{#if url}}[{{artist}}《{{title}}》]({{{url}}}){{else}}{{artist}}《{{title}}》{{/if}}**{{#if feeling}}：{{feeling}}{{/if}}
 {{/each}}
 {{/if}}
 

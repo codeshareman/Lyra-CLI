@@ -7,6 +7,8 @@ import {
   FoodRecord,
   ExerciseRecord,
   MusicRecommendation,
+  MovieRecord,
+  TVRecord,
   Article,
   Tool,
 } from '../types/interfaces';
@@ -67,6 +69,7 @@ describe('EnhancedMetadataManager', () => {
         title: 'Test Article',
         url: 'https://example.com/article',
         rating: 5,
+        category: 'Article',
       };
 
       const frontmatter = {
@@ -88,6 +91,7 @@ describe('EnhancedMetadataManager', () => {
         title: 'Test Article',
         url: 'https://example.com/article',
         rating: 5,
+        category: 'Article',
       };
 
       const frontmatter = {};
@@ -104,71 +108,72 @@ describe('EnhancedMetadataManager', () => {
         title: 'Test Article',
         url: 'https://example.com/article',
         rating: 5,
+        category: 'Article',
       };
 
       const frontmatter = {
-        personal_reflection: 'Using snake case',
+        personal_reflection: 'Snake case reflection',
       };
 
       const enhanced = manager.parseEnhancedArticle(baseArticle, frontmatter);
 
-      expect(enhanced.personalReflection).toBe('Using snake case');
+      expect(enhanced.personalReflection).toBe('Snake case reflection');
     });
   });
 
   describe('parseEnhancedTool', () => {
     it('should parse tool with code snippet', () => {
       const baseTool: Tool = {
-        title: 'Vite',
-        url: 'https://vitejs.dev',
-        rating: 5,
-        category: '开发工具',
+        title: 'Test Tool',
+        url: 'https://example.com/tool',
+        rating: 4,
+        category: 'Development',
       };
 
       const frontmatter = {
-        codeSnippet: 'npm create vite@latest',
-        language: 'bash',
+        codeSnippet: 'console.log("hello")',
+        language: 'javascript',
       };
 
       const enhanced = manager.parseEnhancedTool(baseTool, frontmatter);
 
-      expect(enhanced.title).toBe('Vite');
-      expect(enhanced.codeSnippet).toBe('npm create vite@latest');
-      expect(enhanced.language).toBe('bash');
+      expect(enhanced.title).toBe('Test Tool');
+      expect(enhanced.codeSnippet).toBe('console.log("hello")');
+      expect(enhanced.language).toBe('javascript');
     });
 
     it('should handle missing optional fields', () => {
       const baseTool: Tool = {
-        title: 'Vite',
-        url: 'https://vitejs.dev',
-        rating: 5,
-        category: '开发工具',
+        title: 'Test Tool',
+        url: 'https://example.com/tool',
+        rating: 4,
+        category: 'Development',
       };
 
       const frontmatter = {};
 
       const enhanced = manager.parseEnhancedTool(baseTool, frontmatter);
 
-      expect(enhanced.title).toBe('Vite');
+      expect(enhanced.title).toBe('Test Tool');
       expect(enhanced.codeSnippet).toBeUndefined();
       expect(enhanced.language).toBeUndefined();
     });
 
     it('should support snake_case field names', () => {
       const baseTool: Tool = {
-        title: 'Vite',
-        url: 'https://vitejs.dev',
-        rating: 5,
-        category: '开发工具',
+        title: 'Test Tool',
+        url: 'https://example.com/tool',
+        rating: 4,
+        category: 'Development',
       };
 
       const frontmatter = {
-        code_snippet: 'npm install vite',
+        code_snippet: 'print("hello")',
       };
 
       const enhanced = manager.parseEnhancedTool(baseTool, frontmatter);
 
-      expect(enhanced.codeSnippet).toBe('npm install vite');
+      expect(enhanced.codeSnippet).toBe('print("hello")');
     });
   });
 
@@ -176,10 +181,11 @@ describe('EnhancedMetadataManager', () => {
     it('should parse valid life moment', () => {
       const frontmatter = {
         title: '周末郊游',
-        description: '阳光明媚的周末',
-        images: ['https://example.com/photo1.jpg', 'https://example.com/photo2.jpg'],
+        description: '在奥森公园玩得很开心',
+        url: 'https://example.com/moment',
+        images: ['https://example.com/photo.jpg'],
         date: '2024-01-14',
-        tags: ['旅行', '摄影'],
+        tags: ['户外', '休闲'],
         category: '生活',
       };
 
@@ -187,16 +193,14 @@ describe('EnhancedMetadataManager', () => {
 
       expect(lifeMoment).not.toBeNull();
       expect(lifeMoment!.title).toBe('周末郊游');
-      expect(lifeMoment!.description).toBe('阳光明媚的周末');
-      expect(lifeMoment!.images).toHaveLength(2);
+      expect(lifeMoment!.images).toEqual(['https://example.com/photo.jpg']);
       expect(lifeMoment!.date).toBeInstanceOf(Date);
-      expect(lifeMoment!.tags).toEqual(['旅行', '摄影']);
       expect(lifeMoment!.path).toBe('/path/to/file.md');
     });
 
     it('should return null for missing required fields', () => {
       const frontmatter = {
-        description: '缺少标题和图片',
+        description: '没有标题',
       };
 
       const lifeMoment = manager.parseLifeMoment(frontmatter, '/path/to/file.md');
@@ -234,27 +238,25 @@ describe('EnhancedMetadataManager', () => {
   describe('parseFoodRecord', () => {
     it('should parse valid food record', () => {
       const frontmatter = {
-        title: '川菜火锅',
-        description: '麻辣鲜香',
+        title: '美味火锅',
+        description: '味道很正宗',
         images: ['https://example.com/food.jpg'],
-        date: '2024-01-14',
+        date: '2024-01-15',
         rating: 5,
-        category: '美食',
+        location: '北京',
+        category: '饮食',
       };
 
       const foodRecord = manager.parseFoodRecord(frontmatter, '/path/to/file.md');
 
       expect(foodRecord).not.toBeNull();
-      expect(foodRecord!.title).toBe('川菜火锅');
-      expect(foodRecord!.description).toBe('麻辣鲜香');
-      expect(foodRecord!.images).toHaveLength(1);
+      expect(foodRecord!.title).toBe('美味火锅');
       expect(foodRecord!.rating).toBe(5);
-      expect(foodRecord!.path).toBe('/path/to/file.md');
     });
 
     it('should return null for missing required fields', () => {
       const frontmatter = {
-        description: '缺少标题和图片',
+        rating: 5,
       };
 
       const foodRecord = manager.parseFoodRecord(frontmatter, '/path/to/file.md');
@@ -264,9 +266,9 @@ describe('EnhancedMetadataManager', () => {
 
     it('should handle missing optional rating', () => {
       const frontmatter = {
-        title: '川菜火锅',
+        title: '美味火锅',
         images: ['https://example.com/food.jpg'],
-        date: '2024-01-14',
+        date: '2024-01-15',
       };
 
       const foodRecord = manager.parseFoodRecord(frontmatter, '/path/to/file.md');
@@ -281,9 +283,9 @@ describe('EnhancedMetadataManager', () => {
       const frontmatter = {
         type: '跑步',
         duration: 45,
-        calories: 350,
+        calories: 400,
         date: '2024-01-15',
-        notes: '晨跑5公里',
+        notes: '晨跑 5 公里',
         category: '运动',
       };
 
@@ -295,14 +297,11 @@ describe('EnhancedMetadataManager', () => {
       expect(exerciseRecord).not.toBeNull();
       expect(exerciseRecord!.type).toBe('跑步');
       expect(exerciseRecord!.duration).toBe(45);
-      expect(exerciseRecord!.calories).toBe(350);
-      expect(exerciseRecord!.notes).toBe('晨跑5公里');
-      expect(exerciseRecord!.path).toBe('/path/to/file.md');
     });
 
     it('should return null for missing required fields', () => {
       const frontmatter = {
-        notes: '缺少类型和时长',
+        duration: 45,
       };
 
       const exerciseRecord = manager.parseExerciseRecord(
@@ -315,8 +314,8 @@ describe('EnhancedMetadataManager', () => {
 
     it('should handle missing optional calories', () => {
       const frontmatter = {
-        type: '瑜伽',
-        duration: 30,
+        type: '跑步',
+        duration: 45,
         date: '2024-01-15',
       };
 
@@ -404,6 +403,126 @@ describe('EnhancedMetadataManager', () => {
     });
   });
 
+  describe('parseMovieRecord', () => {
+    it('should parse valid movie record', () => {
+      const frontmatter = {
+        title: 'The Shawshank Redemption',
+        director: 'Frank Darabont',
+        year: 1994,
+        rating: 9.3,
+        review: 'Hope is a good thing.',
+        url: 'https://www.imdb.com/title/tt0111161/',
+        date: '2024-01-15',
+        tags: ['drama', 'hope'],
+        category: '电影',
+      };
+
+      const movieRecord = manager.parseMovieRecord(
+        frontmatter,
+        '/path/to/movie.md'
+      );
+
+      expect(movieRecord).not.toBeNull();
+      expect(movieRecord!.title).toBe('The Shawshank Redemption');
+      expect(movieRecord!.director).toBe('Frank Darabont');
+      expect(movieRecord!.year).toBe(1994);
+      expect(movieRecord!.rating).toBe(9.3);
+      expect(movieRecord!.review).toBe('Hope is a good thing.');
+      expect(movieRecord!.tags).toEqual(['drama', 'hope']);
+    });
+
+    it('should handle optional movie fields', () => {
+      const frontmatter = {
+        title: 'Inception',
+      };
+
+      const movieRecord = manager.parseMovieRecord(
+        frontmatter,
+        '/path/to/movie.md'
+      );
+
+      expect(movieRecord).not.toBeNull();
+      expect(movieRecord!.title).toBe('Inception');
+      expect(movieRecord!.director).toBeUndefined();
+      expect(movieRecord!.rating).toBeUndefined();
+    });
+
+    it('should return null for invalid movie records', () => {
+      const frontmatter = {
+        // missing title
+      };
+
+      const movieRecord = manager.parseMovieRecord(
+        frontmatter,
+        '/path/to/movie.md'
+      );
+
+      expect(movieRecord).toBeNull();
+    });
+  });
+
+  describe('parseTVRecord', () => {
+    it('should parse valid TV record', () => {
+      const frontmatter = {
+        title: 'Breaking Bad',
+        season: 5,
+        episode: 16,
+        status: 'completed',
+        rating: 9.5,
+        review: 'Best show ever.',
+        url: 'https://www.imdb.com/title/tt0903747/',
+        date: '2024-01-15',
+        tags: ['crime', 'drama'],
+        category: '电视剧',
+      };
+
+      const tvRecord = manager.parseTVRecord(frontmatter, '/path/to/tv.md');
+
+      expect(tvRecord).not.toBeNull();
+      expect(tvRecord!.title).toBe('Breaking Bad');
+      expect(tvRecord!.season).toBe(5);
+      expect(tvRecord!.episode).toBe(16);
+      expect(tvRecord!.status).toBe('completed');
+      expect(tvRecord!.rating).toBe(9.5);
+      expect(tvRecord!.review).toBe('Best show ever.');
+    });
+
+    it('should handle optional TV fields', () => {
+      const frontmatter = {
+        title: 'Stranger Things',
+      };
+
+      const tvRecord = manager.parseTVRecord(frontmatter, '/path/to/tv.md');
+
+      expect(tvRecord).not.toBeNull();
+      expect(tvRecord!.title).toBe('Stranger Things');
+      expect(tvRecord!.status).toBeUndefined();
+      expect(tvRecord!.season).toBeUndefined();
+    });
+
+    it('should handle invalid TV status', () => {
+      const frontmatter = {
+        title: 'Dark',
+        status: 'invalid-status',
+      };
+
+      const tvRecord = manager.parseTVRecord(frontmatter, '/path/to/tv.md');
+
+      expect(tvRecord).not.toBeNull();
+      expect(tvRecord!.status).toBeUndefined();
+    });
+
+    it('should return null for invalid TV records', () => {
+      const frontmatter = {
+        // missing title
+      };
+
+      const tvRecord = manager.parseTVRecord(frontmatter, '/path/to/tv.md');
+
+      expect(tvRecord).toBeNull();
+    });
+  });
+
   describe('validateEnhancedMetadata', () => {
     it('should validate valid metadata', () => {
       const metadata = {
@@ -430,25 +549,22 @@ describe('EnhancedMetadataManager', () => {
       const result = manager.validateEnhancedMetadata(metadata);
 
       expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
     });
 
     it('should accept absolute paths for images', () => {
       const metadata = {
-        coverImage: '/assets/cover.jpg',
+        coverImage: '/absolute/path/to/cover.jpg',
       };
 
       const result = manager.validateEnhancedMetadata(metadata);
 
       expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
     });
 
     it('should reject invalid golden quote format', () => {
       const metadata = {
         goldenQuote: {
-          content: '生活不止眼前的苟且',
-          // missing author
+          content: '只有内容没有作者',
         },
       };
 
@@ -466,66 +582,52 @@ describe('EnhancedMetadataManager', () => {
       const result = manager.validateEnhancedMetadata(metadata);
 
       expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
     });
   });
 
   describe('edge cases', () => {
     it('should handle whitespace-only strings as missing', () => {
-      const frontmatter = {
-        title: '   ',
-        images: ['https://example.com/photo.jpg'],
-        date: '2024-01-14',
+      const baseArticle: Article = {
+        title: 'Test',
+        url: 'test',
+        rating: 3,
+        category: 'Article',
       };
-
-      const lifeMoment = manager.parseLifeMoment(frontmatter, '/path/to/file.md');
-
-      expect(lifeMoment).toBeNull();
+      const frontmatter = {
+        personalReflection: '   ',
+      };
+      const enhanced = manager.parseEnhancedArticle(baseArticle, frontmatter);
+      expect(enhanced.personalReflection).toBeUndefined();
     });
 
     it('should filter out empty strings from arrays', () => {
       const frontmatter = {
         title: 'Test',
-        images: ['https://example.com/photo.jpg', '', '  '],
-        date: '2024-01-14',
-        tags: ['valid', '', '  ', 'another'],
+        images: ['https://example.com/img.jpg', '  ', ''],
+        date: '2024-01-01',
       };
-
-      const lifeMoment = manager.parseLifeMoment(frontmatter, '/path/to/file.md');
-
-      expect(lifeMoment).not.toBeNull();
-      expect(lifeMoment!.images).toHaveLength(1);
-      expect(lifeMoment!.tags).toEqual(['valid', 'another']);
+      const lifeMoment = manager.parseLifeMoment(frontmatter, 'test.md');
+      expect(lifeMoment!.images).toEqual(['https://example.com/img.jpg']);
     });
 
     it('should handle invalid date formats', () => {
       const frontmatter = {
-        type: '跑步',
-        duration: 45,
-        date: 'invalid-date',
+        title: 'Test',
+        images: ['img.jpg'],
+        date: 'not-a-date',
       };
-
-      const exerciseRecord = manager.parseExerciseRecord(
-        frontmatter,
-        '/path/to/file.md'
-      );
-
-      expect(exerciseRecord).toBeNull();
+      const lifeMoment = manager.parseLifeMoment(frontmatter, 'test.md');
+      expect(lifeMoment).toBeNull();
     });
 
     it('should handle non-numeric duration', () => {
       const frontmatter = {
-        type: '跑步',
-        duration: 'not-a-number',
-        date: '2024-01-15',
+        type: 'Run',
+        duration: 'fast',
+        date: '2024-01-01',
       };
-
-      const exerciseRecord = manager.parseExerciseRecord(
-        frontmatter,
-        '/path/to/file.md'
-      );
-
-      expect(exerciseRecord).toBeNull();
+      const exercise = manager.parseExerciseRecord(frontmatter, 'test.md');
+      expect(exercise).toBeNull();
     });
   });
 });

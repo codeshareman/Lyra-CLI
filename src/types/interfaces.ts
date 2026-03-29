@@ -372,6 +372,39 @@ export interface MusicRecommendation {
 }
 
 /**
+ * 观影记录
+ */
+export interface MovieRecord {
+  title: string;               // 电影名
+  director?: string;           // 导演
+  year?: number;               // 年份
+  rating?: number;             // 评分
+  review?: string;             // 影评
+  url?: string;                // 链接
+  date?: Date;
+  tags?: string[];
+  category?: string;
+  path?: string;
+}
+
+/**
+ * 电视剧记录
+ */
+export interface TVRecord {
+  title: string;               // 剧名
+  season?: number;             // 季数
+  episode?: number;            // 集数
+  status?: 'watching' | 'completed' | 'on-hold' | 'dropped' | 'planned'; // 观看状态
+  rating?: number;             // 评分
+  review?: string;             // 剧评
+  url?: string;                // 链接
+  date?: Date;
+  tags?: string[];
+  category?: string;
+  path?: string;
+}
+
+/**
  * 多维度筛选条件
  */
 export interface FilterCriteria {
@@ -471,10 +504,13 @@ export interface EnhancedTemplateData extends TemplateData {
     reading?: EnhancedArticle[];
     tech?: EnhancedTool[];
     life?: LifeMoment[];
+    captures?: LifeMoment[];     // 截图/瞬间记录（与 life 相同结构）
     products?: ContentItem[];
     food?: FoodRecord[];
     exercise?: ExerciseRecord[];
     music?: MusicRecommendation[];
+    movies?: MovieRecord[];
+    tv?: TVRecord[];             // 电视剧记录
     thoughts?: ContentItem[];
   };
   statistics: {

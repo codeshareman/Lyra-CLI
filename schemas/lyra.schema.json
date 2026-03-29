@@ -55,9 +55,11 @@
       "properties": {
         "weekly": { "$ref": "#/definitions/moduleConfig", "description": "周刊模块" },
         "life": { "$ref": "#/definitions/moduleConfig", "description": "生活志模块" },
+        "captures": { "$ref": "#/definitions/moduleConfig", "description": "瞬间片段模块" },
         "audiovisual": { "$ref": "#/definitions/moduleConfig", "description": "声图志模块" },
         "tech": { "$ref": "#/definitions/moduleConfig", "description": "技术笔记模块" },
-        "movie": { "$ref": "#/definitions/moduleConfig", "description": "观影志模块" },
+        "movies": { "$ref": "#/definitions/moduleConfig", "description": "观影志模块" },
+        "tv": { "$ref": "#/definitions/moduleConfig", "description": "剧集志模块" },
         "food": { "$ref": "#/definitions/moduleConfig", "description": "觅食记模块" },
         "sports": { "$ref": "#/definitions/moduleConfig", "description": "运动志模块" },
         "ai": { "$ref": "#/definitions/moduleConfig", "description": "ai专栏" }

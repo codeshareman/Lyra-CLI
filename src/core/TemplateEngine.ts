@@ -110,6 +110,11 @@ export class TemplateEngine implements ITemplateEngine {
       return Array.isArray(array) && array.length > 0;
     });
 
+    // or: 逻辑或
+    this.registerHelper('or', (a: any, b: any) => {
+      return a || b;
+    });
+
     // renderImage: 渲染单个图片
     this.registerHelper('renderImage', (url: string, alt?: string | any) => {
       if (!url) return '';
@@ -163,6 +168,12 @@ export class TemplateEngine implements ITemplateEngine {
       // 书籍输入
       pushLinks(contentMap.readingBooks);
 
+      // 银幕观影
+      pushLinks(contentMap.movies);
+
+      // 剧集追更
+      pushLinks(contentMap.tv);
+
       // 技术与生产力：tech -> tools
       if (Array.isArray(contentMap.tech) && contentMap.tech.length > 0) {
         pushLinks(contentMap.tech);
@@ -175,6 +186,9 @@ export class TemplateEngine implements ITemplateEngine {
 
       // 生活记录
       pushLinks(contentMap.life);
+
+      // 瞬间片段
+      pushLinks(contentMap.captures);
 
       // 饮食记录
       pushLinks(contentMap.food);

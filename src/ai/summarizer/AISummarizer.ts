@@ -321,16 +321,18 @@ export class AISummarizer implements IAISummarizer {
       truncated.lastIndexOf('。'),
       truncated.lastIndexOf('！'),
       truncated.lastIndexOf('？'),
+      truncated.lastIndexOf('；'),
       truncated.lastIndexOf('.'),
       truncated.lastIndexOf('!'),
-      truncated.lastIndexOf('?')
+      truncated.lastIndexOf('?'),
+      truncated.lastIndexOf(';')
     );
 
-    if (lastSentenceEnd > maxLength * 0.7) {
+    if (lastSentenceEnd > maxLength * 0.5) {
       return truncated.substring(0, lastSentenceEnd + 1);
     }
 
-    return truncated + '...';
+    return truncated.substring(0, maxLength - 3).trim() + '...';
   }
 
   /**

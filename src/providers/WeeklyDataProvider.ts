@@ -22,6 +22,8 @@ import {
   FoodRecord,
   ExerciseRecord,
   MusicRecommendation,
+  MovieRecord,
+  TVRecord,
   FilterCriteria,
 } from '../types/interfaces';
 import { ArticleFilter } from '../filters/ArticleFilter';
@@ -47,10 +49,13 @@ type EnhancedModuleName =
   | 'reading'
   | 'tech'
   | 'life'
+  | 'captures'
   | 'products'
   | 'food'
   | 'exercise'
   | 'music'
+  | 'movies'
+  | 'tv'
   | 'thoughts';
 
 type UnsplashAsset = {
@@ -124,6 +129,12 @@ export class WeeklyDataProvider implements IDataProvider {
     'photo': 'life',
     'life': 'life',
 
+    // captures
+    '瞬间': 'captures',
+    '片段': 'captures',
+    'captures': 'captures',
+    'moments': 'captures',
+
     // products
     '好物': 'products',
     'shopping': 'products',
@@ -155,6 +166,20 @@ export class WeeklyDataProvider implements IDataProvider {
     '歌曲': 'music',
     'music': 'music',
 
+    // movies
+    '电影': 'movies',
+    '观影': 'movies',
+    'movie': 'movies',
+    'movies': 'movies',
+    'film': 'movies',
+
+    // tv
+    '电视剧': 'tv',
+    '剧集': 'tv',
+    'tv': 'tv',
+    'series': 'tv',
+    'show': 'tv',
+
     // thoughts
     '随感': 'thoughts',
     '随笔': 'thoughts',
@@ -163,6 +188,7 @@ export class WeeklyDataProvider implements IDataProvider {
     '反思': 'thoughts',
     'thoughts': 'thoughts',
     'reflection': 'thoughts',
+    'reflections': 'thoughts',
   };
 
   private static readonly UNSPLASH_ASSETS: UnsplashAsset[] = [
@@ -527,6 +553,11 @@ export class WeeklyDataProvider implements IDataProvider {
       metadataManager.parseLifeMoment.bind(metadataManager),
       { startDate: weekStart, endDate: weekEnd }
     );
+    const capturesFromSources = await this.collectEnhancedSourceRecords(
+      enhancedConfig.sources.captures,
+      metadataManager.parseLifeMoment.bind(metadataManager),
+      { startDate: weekStart, endDate: weekEnd }
+    );
     const foodFromSources = await this.collectEnhancedSourceRecords(
       enhancedConfig.sources.food,
       metadataManager.parseFoodRecord.bind(metadataManager),
@@ -542,16 +573,29 @@ export class WeeklyDataProvider implements IDataProvider {
       metadataManager.parseMusicRecommendation.bind(metadataManager),
       { startDate: weekStart, endDate: weekEnd }
     );
+    const moviesFromSources = await this.collectEnhancedSourceRecords(
+      enhancedConfig.sources.movies,
+      metadataManager.parseMovieRecord.bind(metadataManager),
+      { startDate: weekStart, endDate: weekEnd }
+    );
+    const tvFromSources = await this.collectEnhancedSourceRecords(
+      enhancedConfig.sources.tv,
+      metadataManager.parseTVRecord.bind(metadataManager),
+      { startDate: weekStart, endDate: weekEnd }
+    );
 
     const modules: EnhancedTemplateData['content'] = {
       weeklyUpdates: [],
       reading: [],
       tech: [],
       life: lifeFromSources,
+      captures: capturesFromSources,
       products: [],
       food: foodFromSources,
       exercise: exerciseFromSources,
       music: musicFromSources,
+      movies: moviesFromSources,
+      tv: tvFromSources,
       thoughts: [],
     };
 
@@ -582,10 +626,13 @@ export class WeeklyDataProvider implements IDataProvider {
       reading: modules.reading?.length || 0,
       tech: modules.tech?.length || 0,
       life: modules.life?.length || 0,
+      captures: modules.captures?.length || 0,
       products: modules.products?.length || 0,
       food: modules.food?.length || 0,
       exercise: modules.exercise?.length || 0,
       music: modules.music?.length || 0,
+      movies: modules.movies?.length || 0,
+      tv: modules.tv?.length || 0,
       thoughts: modules.thoughts?.length || 0,
     };
 
@@ -647,10 +694,13 @@ export class WeeklyDataProvider implements IDataProvider {
         'reading',
         'tech',
         'life',
+        'captures',
         'products',
         'food',
         'exercise',
         'music',
+        'movies',
+        'tv',
         'thoughts',
       ];
 
@@ -741,6 +791,9 @@ export class WeeklyDataProvider implements IDataProvider {
       case 'life':
         modules.life!.push(this.toLifeMomentFromArticle(article));
         break;
+      case 'captures':
+        modules.captures!.push(this.toLifeMomentFromArticle(article));
+        break;
       case 'products':
         modules.products!.push(this.toContentItemFromArticle(article));
         break;
@@ -752,6 +805,12 @@ export class WeeklyDataProvider implements IDataProvider {
         break;
       case 'music':
         modules.music!.push(this.toMusicFromArticle(article));
+        break;
+      case 'movies':
+        modules.movies!.push(this.toMovieRecordFromArticle(article));
+        break;
+      case 'tv':
+        modules.tv!.push(this.toTVRecordFromArticle(article));
         break;
       case 'thoughts':
       default:
@@ -779,8 +838,11 @@ export class WeeklyDataProvider implements IDataProvider {
       case 'life':
         modules.life!.push(this.toLifeMomentFromTool(tool));
         break;
+      case 'captures':
+        modules.captures!.push(this.toLifeMomentFromTool(tool));
+        break;
       case 'products':
-        modules.tech!.push(tool);
+        modules.products!.push(this.toContentItemFromTool(tool));
         break;
       case 'food':
         modules.food!.push(this.toFoodRecordFromTool(tool));
@@ -790,6 +852,12 @@ export class WeeklyDataProvider implements IDataProvider {
         break;
       case 'music':
         modules.music!.push(this.toMusicFromTool(tool));
+        break;
+      case 'movies':
+        modules.movies!.push(this.toMovieRecordFromTool(tool));
+        break;
+      case 'tv':
+        modules.tv!.push(this.toTVRecordFromTool(tool));
         break;
       case 'thoughts':
       default:
@@ -817,6 +885,9 @@ export class WeeklyDataProvider implements IDataProvider {
       case 'life':
         modules.life!.push(this.toLifeMomentFromContent(item));
         break;
+      case 'captures':
+        modules.captures!.push(this.toLifeMomentFromContent(item));
+        break;
       case 'products':
         modules.products!.push(item);
         break;
@@ -828,6 +899,12 @@ export class WeeklyDataProvider implements IDataProvider {
         break;
       case 'music':
         modules.music!.push(this.toMusicFromContent(item));
+        break;
+      case 'movies':
+        modules.movies!.push(this.toMovieRecordFromContent(item));
+        break;
+      case 'tv':
+        modules.tv!.push(this.toTVRecordFromContent(item));
         break;
       case 'thoughts':
       default:
@@ -898,10 +975,13 @@ export class WeeklyDataProvider implements IDataProvider {
       'reading',
       'tech',
       'life',
+      'captures',
       'products',
       'food',
       'exercise',
       'music',
+      'movies',
+      'tv',
       'thoughts',
     ];
 
@@ -1254,6 +1334,78 @@ export class WeeklyDataProvider implements IDataProvider {
     };
   }
 
+  private toMovieRecordFromArticle(article: EnhancedArticle): MovieRecord {
+    return {
+      title: article.title,
+      review: article.description,
+      url: article.url,
+      date: this.extractItemDate(article as any),
+      rating: article.rating,
+      category: article.category,
+      path: article.path,
+    };
+  }
+
+  private toMovieRecordFromTool(tool: EnhancedTool): MovieRecord {
+    return {
+      title: tool.title,
+      review: tool.description,
+      url: tool.url,
+      date: this.extractItemDate(tool as any),
+      rating: tool.rating,
+      category: tool.category,
+      path: tool.path,
+    };
+  }
+
+  private toMovieRecordFromContent(item: ContentItem): MovieRecord {
+    return {
+      title: item.title,
+      review: item.description,
+      url: item.url,
+      date: this.extractItemDate(item as any),
+      rating: item.rating,
+      category: item.category,
+      path: item.path,
+    };
+  }
+
+  private toTVRecordFromArticle(article: EnhancedArticle): TVRecord {
+    return {
+      title: article.title,
+      review: article.description,
+      url: article.url,
+      date: this.extractItemDate(article as any),
+      rating: article.rating,
+      category: article.category,
+      path: article.path,
+    };
+  }
+
+  private toTVRecordFromTool(tool: EnhancedTool): TVRecord {
+    return {
+      title: tool.title,
+      review: tool.description,
+      url: tool.url,
+      date: this.extractItemDate(tool as any),
+      rating: tool.rating,
+      category: tool.category,
+      path: tool.path,
+    };
+  }
+
+  private toTVRecordFromContent(item: ContentItem): TVRecord {
+    return {
+      title: item.title,
+      review: item.description,
+      url: item.url,
+      date: this.extractItemDate(item as any),
+      rating: item.rating,
+      category: item.category,
+      path: item.path,
+    };
+  }
+
   private toMusicFromArticle(article: EnhancedArticle): MusicRecommendation {
     return {
       title: article.title,
@@ -1454,13 +1606,14 @@ export class WeeklyDataProvider implements IDataProvider {
       compact = '暂无可提取摘要。';
     }
 
-    compact = this.truncateSummaryAtBoundary(compact, maxLength);
-
-    if (!/[。！？.!?]$/.test(compact)) {
-      compact = this.truncateSummaryAtBoundary(`${compact}。`, maxLength);
+    if (compact.length <= maxLength) {
+      if (!/[。！？.!?]$/.test(compact) && compact.length < maxLength) {
+        return `${compact}。`;
+      }
+      return compact;
     }
 
-    return compact;
+    return this.truncateSummaryAtBoundary(compact, maxLength);
   }
 
   private truncateSummaryAtBoundary(text: string, maxLength: number): string {
@@ -1469,6 +1622,7 @@ export class WeeklyDataProvider implements IDataProvider {
       return compact;
     }
 
+    // Try to find a sentence boundary
     const sliced = compact.slice(0, maxLength);
     const punctuation = ['。', '！', '？', '；', '.', '!', '?', ';'];
     let boundary = -1;
@@ -1477,16 +1631,19 @@ export class WeeklyDataProvider implements IDataProvider {
       boundary = Math.max(boundary, sliced.lastIndexOf(mark));
     }
 
-    if (boundary >= Math.floor(maxLength * 0.55)) {
+    // If we found a boundary nearby, use it
+    if (boundary >= Math.floor(maxLength * 0.5)) {
       return sliced.slice(0, boundary + 1).trim();
     }
 
+    // Fallback to space if it's likely English/Latin
     const spaceBoundary = sliced.lastIndexOf(' ');
     if (spaceBoundary >= Math.floor(maxLength * 0.6)) {
-      return sliced.slice(0, spaceBoundary).trim();
+      return `${sliced.slice(0, spaceBoundary).trim()}...`;
     }
 
-    return sliced.trim();
+    // Hard truncate with ellipsis
+    return `${sliced.slice(0, maxLength - 3).trim()}...`;
   }
 
   private buildLinkAwareSummary(
@@ -2057,10 +2214,13 @@ export class WeeklyDataProvider implements IDataProvider {
       'reading',
       'tech',
       'life',
+      'captures',
       'products',
       'food',
       'exercise',
       'music',
+      'movies',
+      'tv',
       'thoughts',
     ];
 
@@ -2110,17 +2270,20 @@ export class WeeklyDataProvider implements IDataProvider {
 
     const maxBodyImages = this.toNonNegativeInt(imageConfig?.maxBodyImages, 5);
     if (maxBodyImages <= 0) {
-      const moduleNames: EnhancedModuleName[] = [
-        'weeklyUpdates',
-        'reading',
-        'tech',
-        'life',
-        'products',
-        'food',
-        'exercise',
-        'music',
-        'thoughts',
-      ];
+    const moduleNames: EnhancedModuleName[] = [
+      'weeklyUpdates',
+      'reading',
+      'tech',
+      'life',
+      'captures',
+      'products',
+      'food',
+      'exercise',
+      'music',
+      'movies',
+      'tv',
+      'thoughts',
+    ];
       for (const moduleName of moduleNames) {
         this.stripModuleImages(modules[moduleName] as Array<Record<string, any>>);
       }
@@ -2571,15 +2734,31 @@ export class WeeklyDataProvider implements IDataProvider {
     const syncTools = Boolean(toolConfig.syncRecommendedFromHistory);
     const contentConfig = (this.config.content || {}) as Record<string, any>;
     const lifeConfig = (contentConfig.life || {}) as Record<string, any>;
+    const capturesConfig = (contentConfig.captures || {}) as Record<string, any>;
     const foodConfig = (contentConfig.food || {}) as Record<string, any>;
     const exerciseConfig = (contentConfig.exercise || {}) as Record<string, any>;
     const musicConfig = (contentConfig.music || {}) as Record<string, any>;
+    const moviesConfig = (contentConfig.movies || {}) as Record<string, any>;
+    const tvConfig = (contentConfig.tv || {}) as Record<string, any>;
     const isEnhanced = this.isEnhancedConfig(this.config);
     const syncLife = isEnhanced && Boolean(lifeConfig.syncRecommendedFromHistory);
+    const syncCaptures = isEnhanced && Boolean(capturesConfig.syncRecommendedFromHistory);
     const syncFood = isEnhanced && Boolean(foodConfig.syncRecommendedFromHistory);
     const syncExercise = isEnhanced && Boolean(exerciseConfig.syncRecommendedFromHistory);
     const syncMusic = isEnhanced && Boolean(musicConfig.syncRecommendedFromHistory);
-    if (!syncArticles && !syncTools && !syncLife && !syncFood && !syncExercise && !syncMusic) {
+    const syncMovies = isEnhanced && Boolean(moviesConfig.syncRecommendedFromHistory);
+    const syncTV = isEnhanced && Boolean(tvConfig.syncRecommendedFromHistory);
+    if (
+      !syncArticles &&
+      !syncTools &&
+      !syncLife &&
+      !syncCaptures &&
+      !syncFood &&
+      !syncExercise &&
+      !syncMusic &&
+      !syncMovies &&
+      !syncTV
+    ) {
       return;
     }
 
@@ -2594,6 +2773,9 @@ export class WeeklyDataProvider implements IDataProvider {
     const lifeHistoryDays = syncLife
       ? this.toNonNegativeInt(lifeConfig.historyDays, 0)
       : 0;
+    const capturesHistoryDays = syncCaptures
+      ? this.toNonNegativeInt(capturesConfig.historyDays, 0)
+      : 0;
     const foodHistoryDays = syncFood
       ? this.toNonNegativeInt(foodConfig.historyDays, 0)
       : 0;
@@ -2603,13 +2785,22 @@ export class WeeklyDataProvider implements IDataProvider {
     const musicHistoryDays = syncMusic
       ? this.toNonNegativeInt(musicConfig.historyDays, 0)
       : 0;
+    const moviesHistoryDays = syncMovies
+      ? this.toNonNegativeInt(moviesConfig.historyDays, 0)
+      : 0;
+    const tvHistoryDays = syncTV
+      ? this.toNonNegativeInt(tvConfig.historyDays, 0)
+      : 0;
     const historyDays = Math.max(
       articleHistoryDays,
       toolHistoryDays,
       lifeHistoryDays,
+      capturesHistoryDays,
       foodHistoryDays,
       exerciseHistoryDays,
-      musicHistoryDays
+      musicHistoryDays,
+      moviesHistoryDays,
+      tvHistoryDays
     );
     const historyUrls = await this.collectWeeklyHistoryUrls(weekStart, historyDays);
     if (historyUrls.size === 0) {
@@ -2620,9 +2811,12 @@ export class WeeklyDataProvider implements IDataProvider {
     let articleStats = { updatedFiles: 0, updatedEntries: 0 };
     let toolStats = { updatedFiles: 0, updatedEntries: 0 };
     let lifeStats = { updatedFiles: 0, updatedEntries: 0 };
+    let capturesStats = { updatedFiles: 0, updatedEntries: 0 };
     let foodStats = { updatedFiles: 0, updatedEntries: 0 };
     let exerciseStats = { updatedFiles: 0, updatedEntries: 0 };
     let musicStats = { updatedFiles: 0, updatedEntries: 0 };
+    let moviesStats = { updatedFiles: 0, updatedEntries: 0 };
+    let tvStats = { updatedFiles: 0, updatedEntries: 0 };
     if (syncArticles) {
       articleStats = await this.syncArticleRecommendedFlags(historyUrls);
     }
@@ -2635,6 +2829,13 @@ export class WeeklyDataProvider implements IDataProvider {
         historyUrls,
         enhancedConfig.sources?.life,
         'life'
+      );
+    }
+    if (syncCaptures) {
+      capturesStats = await this.syncLogRecommendedFlags(
+        historyUrls,
+        enhancedConfig.sources?.captures,
+        'captures'
       );
     }
     if (syncFood) {
@@ -2658,14 +2859,31 @@ export class WeeklyDataProvider implements IDataProvider {
         'music'
       );
     }
+    if (syncMovies) {
+      moviesStats = await this.syncLogRecommendedFlags(
+        historyUrls,
+        enhancedConfig.sources?.movies,
+        'movies'
+      );
+    }
+    if (syncTV) {
+      tvStats = await this.syncLogRecommendedFlags(
+        historyUrls,
+        enhancedConfig.sources?.tv,
+        'tv'
+      );
+    }
 
     if (
       articleStats.updatedEntries > 0 ||
       toolStats.updatedEntries > 0 ||
       lifeStats.updatedEntries > 0 ||
+      capturesStats.updatedEntries > 0 ||
       foodStats.updatedEntries > 0 ||
       exerciseStats.updatedEntries > 0 ||
-      musicStats.updatedEntries > 0
+      musicStats.updatedEntries > 0 ||
+      moviesStats.updatedEntries > 0 ||
+      tvStats.updatedEntries > 0
     ) {
       const parts = [
         `articles=${articleStats.updatedEntries} (files=${articleStats.updatedFiles})`,
@@ -2673,6 +2891,9 @@ export class WeeklyDataProvider implements IDataProvider {
       ];
       if (syncLife) {
         parts.push(`life=${lifeStats.updatedEntries} (files=${lifeStats.updatedFiles})`);
+      }
+      if (syncCaptures) {
+        parts.push(`captures=${capturesStats.updatedEntries} (files=${capturesStats.updatedFiles})`);
       }
       if (syncFood) {
         parts.push(`food=${foodStats.updatedEntries} (files=${foodStats.updatedFiles})`);
@@ -2684,6 +2905,12 @@ export class WeeklyDataProvider implements IDataProvider {
       }
       if (syncMusic) {
         parts.push(`music=${musicStats.updatedEntries} (files=${musicStats.updatedFiles})`);
+      }
+      if (syncMovies) {
+        parts.push(`movies=${moviesStats.updatedEntries} (files=${moviesStats.updatedFiles})`);
+      }
+      if (syncTV) {
+        parts.push(`tv=${tvStats.updatedEntries} (files=${tvStats.updatedFiles})`);
       }
       console.log(`[weekly] 推荐标记已同步: ${parts.join(', ')}`);
     } else {

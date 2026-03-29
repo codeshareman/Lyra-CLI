@@ -18,6 +18,9 @@ describe('WeeklyDataProvider Enhanced Mode', () => {
     await fs.mkdir(path.join(tempDir, 'food'), { recursive: true });
     await fs.mkdir(path.join(tempDir, 'exercise'), { recursive: true });
     await fs.mkdir(path.join(tempDir, 'music'), { recursive: true });
+    await fs.mkdir(path.join(tempDir, 'movies'), { recursive: true });
+    await fs.mkdir(path.join(tempDir, 'tv'), { recursive: true });
+    await fs.mkdir(path.join(tempDir, 'captures'), { recursive: true });
   });
 
   afterEach(async () => {
@@ -125,6 +128,42 @@ category: 音乐
       'utf-8'
     );
 
+    await fs.writeFile(
+      path.join(tempDir, 'movies', 'movie.md'),
+      `---
+title: Movie A
+director: Director A
+category: 电影
+date: 2024-01-03
+---
+`,
+      'utf-8'
+    );
+
+    await fs.writeFile(
+      path.join(tempDir, 'tv', 'tv.md'),
+      `---
+title: TV A
+status: watching
+category: 电视剧
+date: 2024-01-03
+---
+`,
+      'utf-8'
+    );
+
+    await fs.writeFile(
+      path.join(tempDir, 'captures', 'cap.md'),
+      `---
+title: Capture A
+images: ["img.jpg"]
+category: 瞬间
+date: 2024-01-03
+---
+`,
+      'utf-8'
+    );
+
     const config: EnhancedTemplateConfig = {
       enabled: true,
       template: { path: './templates/weekly.hbs' },
@@ -136,6 +175,9 @@ category: 音乐
         food: path.join(tempDir, 'food'),
         exercise: path.join(tempDir, 'exercise'),
         music: path.join(tempDir, 'music'),
+        movies: path.join(tempDir, 'movies'),
+        tv: path.join(tempDir, 'tv'),
+        captures: path.join(tempDir, 'captures'),
       },
       output: {
         path: tempDir,
@@ -151,10 +193,13 @@ category: 音乐
         reading: { enabled: true },
         tech: { enabled: true },
         life: { enabled: true },
+        captures: { enabled: true },
         products: { enabled: true },
         food: { enabled: true },
         exercise: { enabled: true },
         music: { enabled: true },
+        movies: { enabled: true },
+        tv: { enabled: true },
         thoughts: { enabled: true },
       },
     };
@@ -171,6 +216,9 @@ category: 音乐
     expect(data.content.food?.some((item) => item.title === 'Food Record')).toBe(true);
     expect(data.content.exercise?.some((item) => item.type === 'Running')).toBe(true);
     expect(data.content.music?.some((item) => item.title === 'Song A')).toBe(true);
+    expect(data.content.movies?.some((item) => item.title === 'Movie A')).toBe(true);
+    expect(data.content.tv?.some((item) => item.title === 'TV A')).toBe(true);
+    expect(data.content.captures?.some((item) => item.title === 'Capture A')).toBe(true);
   });
 
   it('should not classify MacBook-style titles as books', async () => {
@@ -200,6 +248,9 @@ content
         food: path.join(tempDir, 'food'),
         exercise: path.join(tempDir, 'exercise'),
         music: path.join(tempDir, 'music'),
+        movies: path.join(tempDir, 'movies'),
+        tv: path.join(tempDir, 'tv'),
+        captures: path.join(tempDir, 'captures'),
       },
       output: {
         path: tempDir,
@@ -215,10 +266,13 @@ content
         reading: { enabled: true },
         tech: { enabled: true },
         life: { enabled: true },
+        captures: { enabled: true },
         products: { enabled: true },
         food: { enabled: true },
         exercise: { enabled: true },
         music: { enabled: true },
+        movies: { enabled: true },
+        tv: { enabled: true },
         thoughts: { enabled: true },
       },
     };
@@ -306,5 +360,109 @@ created: 2024-01-03
 
     expect(data.statistics.reading).toBe(data.content.reading?.length || 0);
     expect(data.statistics.thoughts).toBe(data.content.thoughts?.length || 0);
+  });
+
+  it("should synchronize recommendation flags for enhanced modules from history", async () => {
+    // Ensure directories exist
+    await fs.mkdir(path.join(tempDir, "articles"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "tools"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "notes"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "movies"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "tv"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "captures"), { recursive: true });
+    await fs.mkdir(path.join(tempDir, "output"), { recursive: true });
+
+    // Create a previous weekly issue with some recommendations
+    await fs.writeFile(
+      path.join(tempDir, "output", "weekly-1.md"),
+      `---
+title: Weekly Issue #1
+week_end: 2023-12-30
+---
+## 银幕观影
+- [Movie A](https://example.com/movie-a)
+## 剧集追更
+- [TV A](https://example.com/tv-a)
+## 瞬间片段
+- [Capture A](https://example.com/capture-a)
+`,
+      "utf-8"
+    );
+
+    // Create current records
+    await fs.writeFile(
+      path.join(tempDir, "movies", "movie-a.md"),
+      `---
+title: Movie A
+url: https://example.com/movie-a
+category: 电影
+date: 2024-01-03
+weekly_recommended: false
+---
+`,
+      "utf-8"
+    );
+
+    await fs.writeFile(
+      path.join(tempDir, "tv", "tv-a.md"),
+      `---
+title: TV A
+url: https://example.com/tv-a
+category: 电视剧
+date: 2024-01-03
+weekly_recommended: false
+---
+`,
+      "utf-8"
+    );
+
+    await fs.writeFile(
+      path.join(tempDir, "captures", "capture-a.md"),
+      `---
+title: Capture A
+url: https://example.com/capture-a
+category: 瞬间
+date: 2024-01-03
+images: ["img.jpg"]
+weekly_recommended: false
+---
+`,
+      "utf-8"
+    );
+
+    const config: EnhancedTemplateConfig = {
+      enabled: true,
+      templateVersion: "enhanced",
+      template: { path: "./templates/weekly.hbs" },
+      sources: {
+        articles: path.join(tempDir, "articles"),
+        tools: path.join(tempDir, "tools"),
+        notes: path.join(tempDir, "notes"),
+        movies: path.join(tempDir, "movies"),
+        tv: path.join(tempDir, "tv"),
+        captures: path.join(tempDir, "captures"),
+      },
+      output: {
+        path: path.join(tempDir, "output"), // Absolute path
+        filename: "weekly-{{issueNumber}}.md",
+      },
+      content: {
+        movies: { syncRecommendedFromHistory: true, historyDays: 7 },
+        tv: { syncRecommendedFromHistory: true, historyDays: 7 },
+        captures: { syncRecommendedFromHistory: true, historyDays: 7 },
+      },
+    };
+
+    const provider = new WeeklyDataProvider(config, new HookManager(), tempDir);
+    await provider.collectData({ date: new Date("2024-01-04"), config });
+
+    // Verify that the files were updated with weekly_recommended: true
+    const movieContent = await fs.readFile(path.join(tempDir, "movies", "movie-a.md"), "utf-8");
+    const tvContent = await fs.readFile(path.join(tempDir, "tv", "tv-a.md"), "utf-8");
+    const captureContent = await fs.readFile(path.join(tempDir, "captures", "capture-a.md"), "utf-8");
+
+    expect(movieContent).toContain("weekly_recommended: true");
+    expect(tvContent).toContain("weekly_recommended: true");
+    expect(captureContent).toContain("weekly_recommended: true");
   });
 });
