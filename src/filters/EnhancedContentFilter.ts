@@ -45,8 +45,13 @@ export class EnhancedContentFilter implements IEnhancedContentFilter {
       return false;
     }
 
+    const itemCat = item.category.toLowerCase();
     // OR 逻辑：匹配任意一个分类即可
-    return categories.includes(item.category);
+    // 支持包含匹配：item.category 包含 filter 中的分类，或 filter 中的分类包含 item.category
+    return categories.some(cat => {
+      const filterCat = cat.toLowerCase();
+      return itemCat === filterCat || itemCat.includes(filterCat) || filterCat.includes(itemCat);
+    });
   }
 
   /**

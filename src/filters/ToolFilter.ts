@@ -268,19 +268,23 @@ export class ToolFilter implements IToolFilter {
       const tools: Tool[] = [];
 
       // 解析 frontmatter 中的工具列表（如果存在）
-      if (Array.isArray(data.tools)) {
-        for (const toolData of data.tools) {
+      // 支持多个 key：tools（标准）、sources（兼容）、items（兼容）
+      const toolList = Array.isArray(data.tools)
+        ? data.tools
+        : Array.isArray(data.sources)
+          ? data.sources
+          : Array.isArray(data.items)
+            ? data.items
+            : null;
+
+      if (toolList) {
+        for (const toolData of toolList) {
           if (typeof toolData === 'object') {
             const tool = this.createToolFromData(toolData, category, filePath);
             tools.push(tool);
           }
         }
       }
-
-      // 如果 frontmatter 中没有工具列表，尝试从内容中解析
-      // 这里假设工具以 Markdown 列表或标题的形式组织
-      // 为了简化，我们主要依赖 frontmatter 中的 tools 数组
-      // 如果需要从内容解析，可以在这里添加逻辑
 
       return tools;
     } catch (error) {
